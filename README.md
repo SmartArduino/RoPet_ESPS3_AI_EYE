@@ -1,7 +1,4 @@
-<<<<<<< HEAD
 # RoPet_ESPS3_AI_EYE
-=======
-# ESP32-S3-AI_EYE x 小智 AI
 
 *   首先致谢虾哥的开源项目：https://github.com/78/xiaozhi-esp32
 *   其次致谢：https://github.com/xinnan-tech/xiaozhi-esp32-server
@@ -22,6 +19,12 @@ https://www.bilibili.com/video/BV1zcV2zLEEb/
 
 https://www.bilibili.com/video/BV1BcV2zLEaf/
 
+## 使用说明
+1. 获取代码：git clone https://github.com/SmartArduino/RoPet_ESPS3_AI_EYE.git
+2. 
+3. 带4个触摸，可以和双目互动。
+4. 可以扩展加摄像头支持多模态。
+
 ## 硬件部分
 查看工程
 AI-EYE.PcbDoc / AI-EYE.SchDoc
@@ -31,4 +34,3 @@ AI-EYE.PcbDoc / AI-EYE.SchDoc
 
 ## 购买链接
 https://shenzhendoit.taobao.com/category-1782003610.htm
->>>>>>> master
