@@ -29,7 +29,7 @@ https://www.bilibili.com/video/BV1BcV2zLEaf/
 
 ## 硬件部分
 查看工程
-AI-EYE.PcbDoc / AI-EYE.SchDoc
+hardware目录下的AI-EYE.PcbDoc / AI-EYE.SchDoc
 
 ## 技术支持
 ![alt text](image.png)
