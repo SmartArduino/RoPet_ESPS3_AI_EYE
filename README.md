@@ -25,7 +25,6 @@ https://www.bilibili.com/video/BV1BcV2zLEaf/
 3. 编译工程：idf.py build
 4. 修改menuconfig:idf.py menuconfig
     将Xiaozhi Assistant->Board Type设置为doit-esp32s3-eye,并开启使用魔眼界面风格
-    ![alt text](image-1.png)
 5. 烧录代码:idf.py flash
 
 ## 硬件部分
