@@ -35,4 +35,4 @@ hardware目录下的AI-EYE.PcbDoc / AI-EYE.SchDoc / datasheet目录
 ![alt text](image.png)
 
 ## 购买链接
-https://shenzhendoit.taobao.com/category-1782003610.htm
+https://shenzhendoit.taobao.com/category-1782003610.htm](https://item.taobao.com/item.htm?id=920076138845
