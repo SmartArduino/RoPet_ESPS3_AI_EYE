@@ -21,16 +21,19 @@ https://www.bilibili.com/video/BV1BcV2zLEaf/
 
 ## 使用说明
 1. 获取代码：git clone https://github.com/SmartArduino/RoPet_ESPS3_AI_EYE.git
-2. 
-3. 带4个触摸，可以和双目互动。
-4. 可以扩展加摄像头支持多模态。
+2. 使用vscode打开工程（需espidf版本>5.3.2）,设置目标芯片为esp32s3，命令：idf.py set-target esp32s3
+3. 编译工程：idf.py build
+4. 修改menuconfig:idf.py menuconfig
+    将Xiaozhi Assistant->Board Type设置为doit-esp32s3-eye,并开启使用魔眼界面风格
+    ![alt text](image-1.png)
+5. 烧录代码:idf.py flash
+
 
 ## 硬件部分
-查看工程
-AI-EYE.PcbDoc / AI-EYE.SchDoc
+查看工程 hardware目录下的AI-EYE.PcbDoc / AI-EYE.SchDoc / datasheet目录
 
 ## 技术支持
 ![alt text](image.png)
 
 ## 购买链接
-https://shenzhendoit.taobao.com/category-1782003610.htm
+https://item.taobao.com/item.htm?id=920076138845

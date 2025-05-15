@@ -1,3 +1,10 @@
+/*
+ * @Description: 
+ * @Author: cjs丶
+ * @Date: 2025-05-06 15:58:55
+ * @LastEditTime: 2025-05-13 18:56:22
+ * @LastEditors: cjs丶
+ */
 #ifndef _BOARD_CONFIG_H_
 #define _BOARD_CONFIG_H_
 
@@ -35,12 +42,12 @@
 //默认不启用颜色反转。
 #define DISPLAY_INVERT_COLOR    true
 //RGB顺序：LH128R-IG01使用RGB垂直条纹排列，因此设置为 LCD_RGB_ELEMENT_ORDER_RGB。
-#define DISPLAY_RGB_ORDER  LCD_RGB_ELEMENT_ORDER_RGB
+#define DISPLAY_RGB_ORDER  LCD_RGB_ELEMENT_ORDER_BGR
 //偏移量：通常不需要偏移，除非你的显示屏有特定的显示区域限制。
 #define DISPLAY_OFFSET_X  0
 #define DISPLAY_OFFSET_Y  0
 //背光输出取反：默认不取反，除非你的背光控制电路需要取反信号。
-#define DISPLAY_BACKLIGHT_OUTPUT_INVERT false
+#define DISPLAY_BACKLIGHT_OUTPUT_INVERT true
 #define DISPLAY_BACKLIGHT_PIN GPIO_NUM_NC
 #define DISPLAY_SPI_SCLK_HZ     (40 * 1000 * 1000)
 

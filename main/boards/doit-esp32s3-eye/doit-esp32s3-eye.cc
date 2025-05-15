@@ -113,18 +113,20 @@ private:
             .trans_queue_depth = 10,
             .lcd_cmd_bits = GC9A01_LCD_CMD_BITS,
             .lcd_param_bits = GC9A01_LCD_PARAM_BITS,
-    
+            
     
         };
         esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)GC9A01_LCD_SPI1_NUM, &io_config, &lcd_io1);
         lcd_io_eye = lcd_io1;
     
         ESP_LOGD(TAG, "Install LCD1 driver");
-        const esp_lcd_panel_dev_config_t panel_config = {
+        esp_lcd_panel_dev_config_t panel_config = {
             .reset_gpio_num = GC9A01_SPI1_LCD_GPIO_RST,
             .color_space = GC9A01_LCD_COLOR_SPACE,
             .bits_per_pixel = GC9A01_LCD_BITS_PER_PIXEL,
+            
         };
+        panel_config.rgb_endian = DISPLAY_RGB_ORDER;
         esp_lcd_new_panel_gc9a01(lcd_io1, &panel_config, &lcd_panel1);
         lcd_panel_eye = lcd_panel1;
         
@@ -168,17 +170,19 @@ private:
         lcd_io_eye2 = lcd_io2;
     
         ESP_LOGD(TAG, "Install LCD2 driver");
-        const esp_lcd_panel_dev_config_t panel_config = {
+        esp_lcd_panel_dev_config_t panel_config = {
             .reset_gpio_num = GC9A01_SPI2_LCD_GPIO_RST,
             .color_space = GC9A01_LCD_COLOR_SPACE,
-            .bits_per_pixel = GC9A01_LCD_BITS_PER_PIXEL,
+            .bits_per_pixel = GC9A01_LCD_BITS_PER_PIXEL
         };
+           panel_config.rgb_endian = DISPLAY_RGB_ORDER;
         esp_lcd_new_panel_gc9a01(lcd_io2, &panel_config, &lcd_panel2);
         lcd_panel_eye2 = lcd_panel2;
         esp_lcd_panel_reset(lcd_panel2);
         esp_lcd_panel_init(lcd_panel2);
         esp_lcd_panel_invert_color(lcd_panel2, true);
         esp_lcd_panel_disp_on_off(lcd_panel2, true);
+        
     }
 
     //初始化双屏

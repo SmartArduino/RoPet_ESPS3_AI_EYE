@@ -44,16 +44,29 @@ TaskHandle_t eye_update_handler = NULL;
 // #define IRIS_MAX      260 // Clip upper "
 
 
-// const uint16_t *sclera = sclera_default;
-// const uint8_t *upper = upper_default;
-// const uint8_t *lower = lower_default;
-// const uint16_t *polar = polar_default;
-// const uint16_t *iris = iris_default;
-const uint16_t *sclera = sclera_my;
-const uint8_t *upper = upper_my;
-const uint8_t *lower = lower_my;
-const uint16_t *polar = polar_my;
-const uint16_t *iris = iris_my;
+const uint16_t *sclera = sclera_default;
+const uint8_t *upper = upper_default;
+const uint8_t *lower = lower_default;
+const uint16_t *polar = polar_default;
+const uint16_t *iris = iris_default;
+
+// const uint16_t *sclera = sclera_gh_n;
+// const uint8_t *upper = upper_gh_n;
+// const uint8_t *lower = lower_gh_n;
+// const uint16_t *polar = polar_gh_n;
+// const uint16_t *iris = iris_gh_n;
+
+// const uint16_t *sclera = sclera_dd;
+// const uint8_t *upper = upper_dd;
+// const uint8_t *lower = lower_dd;
+// const uint16_t *polar = polar_dd;
+// const uint16_t *iris = iris_dd;
+
+// const uint16_t *sclera = sclera_d;
+// const uint8_t *upper = upper_d;
+// const uint8_t *lower = lower_d;
+// const uint16_t *polar = polar_d;
+// const uint16_t *iris = iris_d;
 
 
 uint16_t SCLERA_WIDTH  = 375;   //巩膜的宽度（眼白）
