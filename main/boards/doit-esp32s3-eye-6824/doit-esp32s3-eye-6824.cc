@@ -17,9 +17,12 @@
 #include <esp_lcd_panel_ops.h>
 #include <driver/spi_common.h>
 #include <esp_lcd_gc9a01.h>
+#include "mcp_server.h"
 #if CONFIG_USE_EYE_STYLE_ES8311
 #include "touch_button.h"
 #endif
+#include "assets/lang_config.h"
+#include "doit_csi.h"
 
 #define TAG "CompactWifiBoardLCD"
 
@@ -181,6 +184,59 @@ private:
                                      });
     }
 
+    void CountDown()
+    {
+        std::string code = "987654321";
+
+        struct digit_sound
+        {
+            char digit;
+            const std::string_view &sound;
+        };
+        static const std::array<digit_sound, 10> digit_sounds{{digit_sound{'0', Lang::Sounds::P3_0},
+                                                               digit_sound{'1', Lang::Sounds::P3_1},
+                                                               digit_sound{'2', Lang::Sounds::P3_2},
+                                                               digit_sound{'3', Lang::Sounds::P3_3},
+                                                               digit_sound{'4', Lang::Sounds::P3_4},
+                                                               digit_sound{'5', Lang::Sounds::P3_5},
+                                                               digit_sound{'6', Lang::Sounds::P3_6},
+                                                               digit_sound{'7', Lang::Sounds::P3_7},
+                                                               digit_sound{'8', Lang::Sounds::P3_8},
+                                                               digit_sound{'9', Lang::Sounds::P3_9}}};
+
+        for (const auto &digit : code)
+        {
+            auto it = std::find_if(digit_sounds.begin(), digit_sounds.end(),
+                                   [digit](const digit_sound &ds)
+                                   { return ds.digit == digit; });
+            if (it != digit_sounds.end())
+            {
+                auto &app = Application::GetInstance();
+                app.PlaySound(it->sound);
+            }
+        }
+    }
+
+    void RegisterMcpTools()
+    {
+        auto &mcp_server = McpServer::GetInstance();
+
+        ESP_LOGI(TAG, "开始注册Eye MCP工具...");
+        // 手部动作统一工具
+        mcp_server.AddTool(
+            "self.radar.calibration",
+            "雷达校准，当收到用户说开始校准时，大模型大模型开始10秒倒计时，大模型回复内容：‘准备开始校准，请在10秒内离开房间’，其他的什么都不要回复！，只需要回复单引号的内容即可",
+            PropertyList(),
+            [this](const PropertyList &properties) -> ReturnValue
+            {
+                auto &app = Application::GetInstance();
+                app.CountDown();
+                return true;
+            });
+
+        ESP_LOGI(TAG, "Eye MCP工具注册完成");
+    }
+
 public:
     CompactWifiBoardLCD() : boot_button_(BOOT_BUTTON_GPIO), audio_codec(CODEC_RX_GPIO, CODEC_TX_GPIO)
     {
@@ -225,9 +281,11 @@ public:
                 }
             // 如果唤醒词为"开始配网"，则重置WiFi配置
             }else if (command == "开始配网"){
-                ESP_LOGI(TAG,"fff");
                 ResetWifiConfiguration();
             } });
+
+        RegisterMcpTools();
+        ESP_LOGI(TAG, "Eye已初始化并注册MCP工具");
     }
 
     virtual Led *GetLed() override
