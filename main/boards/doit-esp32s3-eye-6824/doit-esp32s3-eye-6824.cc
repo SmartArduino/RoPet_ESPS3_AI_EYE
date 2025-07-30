@@ -22,7 +22,8 @@
 #include "touch_button.h"
 #endif
 #include "assets/lang_config.h"
-#include "doit_csi.h"
+#include "doit_blufi.h"
+#include "csi_controller.h"
 
 #define TAG "CompactWifiBoardLCD"
 
@@ -184,62 +185,96 @@ private:
                                      });
     }
 
-    void CountDown()
+    virtual void StartNetwork() override
     {
-        std::string code = "987654321";
+        Ota ota_;
+        // User can press BOOT button while starting to enter WiFi configuration mode
+        uint8_t is_config = 0;
+        bool has_config = blufi_storage_read_has_config();
 
-        struct digit_sound
+        auto display = Board::GetInstance().GetDisplay();
+        if (has_config == 0)
         {
-            char digit;
-            const std::string_view &sound;
-        };
-        static const std::array<digit_sound, 10> digit_sounds{{digit_sound{'0', Lang::Sounds::P3_0},
-                                                               digit_sound{'1', Lang::Sounds::P3_1},
-                                                               digit_sound{'2', Lang::Sounds::P3_2},
-                                                               digit_sound{'3', Lang::Sounds::P3_3},
-                                                               digit_sound{'4', Lang::Sounds::P3_4},
-                                                               digit_sound{'5', Lang::Sounds::P3_5},
-                                                               digit_sound{'6', Lang::Sounds::P3_6},
-                                                               digit_sound{'7', Lang::Sounds::P3_7},
-                                                               digit_sound{'8', Lang::Sounds::P3_8},
-                                                               digit_sound{'9', Lang::Sounds::P3_9}}};
+            // If not configured, enter WiFi configuration mode
+            EnterWifiConfigMode();
+        }
+        else
+        {
+            // Otherwise, start the WiFi station
+            is_config = 1;
 
-        for (const auto &digit : code)
+            // auto& wifi_station = WifiStation::GetInstance();
+            // wifi_station.Start();
+            blufi_wifi_start_connect();
+            std::string notification = Lang::Strings::CONNECT_TO;
+            notification += "wifi";
+            notification += "...";
+            display->ShowNotification(notification.c_str(), 30000);
+        }
+
+        const int MAX_RETRY = 3;
+        int retry_count = 0;
+        int retry_delay = 10; // 初始重试延迟为10秒
+        uint8_t wait_cnt = 0;
+        while (1)
         {
-            auto it = std::find_if(digit_sounds.begin(), digit_sounds.end(),
-                                   [digit](const digit_sound &ds)
-                                   { return ds.digit == digit; });
-            if (it != digit_sounds.end())
+            wait_cnt += 1;
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            if (blufi_wifi_sta_get_connect_status())
             {
-                auto &app = Application::GetInstance();
-                app.PlaySound(it->sound);
+                if (is_config == 0)
+                {
+                    vTaskDelay(pdMS_TO_TICKS(100));
+                    if (!ota_.CheckVersion())
+                    {
+                        retry_count++;
+                        if (retry_count >= MAX_RETRY)
+                        {
+                            ESP_LOGE(TAG, "Too many retries, exit version check");
+                            return;
+                        }
+
+                        ESP_LOGW(TAG, "Check new version failed, retry in %d seconds (%d/%d)", retry_delay, retry_count, MAX_RETRY);
+                        for (int i = 0; i < retry_delay; i++)
+                        {
+                            vTaskDelay(pdMS_TO_TICKS(1000));
+                        }
+                        retry_delay *= 2; // 每次重试后延迟时间翻倍
+                        continue;
+                    }
+                    auto &message = ota_.GetActivationMessage();
+                    auto &code = ota_.GetActivationCode();
+                    ESP_LOGI(TAG, "Activation code: %s", code.c_str());
+                    doit_blufi_send_code((uint8_t *)code.c_str());
+                    esp_restart();
+                    // esp_restart();
+                }
+                break;
+            }
+
+            if (wait_cnt > 180)
+            { // 3 minutes
+                EnterWifiConfigMode();
+                return;
             }
         }
-    }
 
-    void RegisterMcpTools()
-    {
-        auto &mcp_server = McpServer::GetInstance();
+        // 初始化CSI
+        CSIController::GetInstance().Init();
+        std::string conn_notification = Lang::Strings::CONNECTED_TO;
+        display->ShowNotification(conn_notification.c_str(), 30000);
 
-        ESP_LOGI(TAG, "开始注册Eye MCP工具...");
-        // 手部动作统一工具
-        mcp_server.AddTool(
-            "self.radar.calibration",
-            "雷达校准，当收到用户说开始校准时，大模型大模型开始10秒倒计时，大模型回复内容：‘准备开始校准，请在10秒内离开房间’，其他的什么都不要回复！，只需要回复单引号的内容即可",
-            PropertyList(),
-            [this](const PropertyList &properties) -> ReturnValue
-            {
-                auto &app = Application::GetInstance();
-                app.CountDown();
-                return true;
-            });
-
-        ESP_LOGI(TAG, "Eye MCP工具注册完成");
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 
 public:
     CompactWifiBoardLCD() : boot_button_(BOOT_BUTTON_GPIO), audio_codec(CODEC_RX_GPIO, CODEC_TX_GPIO)
     {
+        // 检查CSI配置
+#if !defined(CONFIG_ESP_WIFI_CSI_ENABLED)
+#error "The ESP_WIFI_CSI_ENABLED was not enabled in the menuconfig"
+#endif
+
 // 如果定义了CONFIG_LCD_GC9A01_160X160，则配置GPIO引脚
 #if CONFIG_LCD_GC9A01_160X160
         gpio_config_t bk_gpio_config = {
@@ -283,9 +318,7 @@ public:
             }else if (command == "开始配网"){
                 ResetWifiConfiguration();
             } });
-
-        RegisterMcpTools();
-        ESP_LOGI(TAG, "Eye已初始化并注册MCP工具");
+        audio_codec.SetOutputVolume(100);
     }
 
     virtual Led *GetLed() override

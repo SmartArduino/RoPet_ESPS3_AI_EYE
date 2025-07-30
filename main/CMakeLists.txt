@@ -15,6 +15,7 @@ set(SOURCES "audio_codecs/audio_codec.cc"
             "protocols/protocol.cc"
             "protocols/mqtt_protocol.cc"
             "protocols/websocket_protocol.cc"
+            "csi/csi_controller.cc"
             "iot/thing.cc"
             "iot/thing_manager.cc"
             "mcp_server.cc"
@@ -26,7 +27,7 @@ set(SOURCES "audio_codecs/audio_codec.cc"
             "main.cc"
             )
 
-set(INCLUDE_DIRS "." "display" "audio_codecs" "protocols" "audio_processing" "eye_data")
+set(INCLUDE_DIRS "." "display" "audio_codecs" "protocols" "audio_processing" "eye_data" "csi")
 
 # 添加 IOT 相关文件
 file(GLOB IOT_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/iot/things/*.cc)
