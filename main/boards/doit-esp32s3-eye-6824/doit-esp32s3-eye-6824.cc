@@ -23,7 +23,6 @@
 #endif
 #include "assets/lang_config.h"
 #include "doit_blufi.h"
-#include "csi_controller.h"
 
 #define TAG "CompactWifiBoardLCD"
 
@@ -259,8 +258,6 @@ private:
             }
         }
 
-        // 初始化CSI
-        CSIController::GetInstance().Init();
         std::string conn_notification = Lang::Strings::CONNECTED_TO;
         display->ShowNotification(conn_notification.c_str(), 30000);
 
@@ -270,10 +267,6 @@ private:
 public:
     CompactWifiBoardLCD() : boot_button_(BOOT_BUTTON_GPIO), audio_codec(CODEC_RX_GPIO, CODEC_TX_GPIO)
     {
-        // 检查CSI配置
-#if !defined(CONFIG_ESP_WIFI_CSI_ENABLED)
-#error "The ESP_WIFI_CSI_ENABLED was not enabled in the menuconfig"
-#endif
 
 // 如果定义了CONFIG_LCD_GC9A01_160X160，则配置GPIO引脚
 #if CONFIG_LCD_GC9A01_160X160
