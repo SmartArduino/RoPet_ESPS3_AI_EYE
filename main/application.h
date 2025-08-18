@@ -170,6 +170,7 @@ public:
     void CountDown();
     AecMode GetAecMode() const { return aec_mode_; }
     BackgroundTask *GetBackgroundTask() const { return background_task_; }
+    void PushMuteAudio(int mute_time);
 
 #if defined(CONFIG_VB6824_OTA_SUPPORT) && CONFIG_VB6824_OTA_SUPPORT == 1
     void ReleaseDecoder();
