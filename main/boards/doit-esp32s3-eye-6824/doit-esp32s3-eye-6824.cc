@@ -360,4 +360,4 @@ public:
 #endif
 };
 
-DECLARE_BOARD(CompactWifiBoardLCD);
+    DECLARE_BOARD(CompactWifiBoardLCD);
