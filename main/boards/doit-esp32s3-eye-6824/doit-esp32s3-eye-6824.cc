@@ -43,6 +43,8 @@ private:
     LcdDisplay *display_;
     VbAduioCodec audio_codec;
     PowerSaveTimer *power_save_timer_;
+    int64_t boot_time_us_; // 开机时间（微秒），用于按钮保护期
+    bool first_idle_auto_wake_done_ = false; // 标记是否已经完成首次自动唤醒
 
     void InitializePowerSaveTimer()
     {
@@ -78,12 +80,36 @@ private:
         power_save_timer_->SetEnabled(true);
     }
 
+    // 首次进入idle状态时自动唤醒智能体
+    void CheckFirstIdleAutoWake() {
+        if (!first_idle_auto_wake_done_) {
+            auto& app = Application::GetInstance();
+            if (app.GetDeviceState() == kDeviceStateIdle) {
+                first_idle_auto_wake_done_ = true;
+                ESP_LOGI(TAG, "首次进入idle状态，自动唤醒智能体");
+                
+                // 延迟2秒后自动唤醒，确保系统完全稳定
+                app.Schedule([this]() {
+                    vTaskDelay(pdMS_TO_TICKS(2000));
+                    Application::GetInstance().WakeWordInvoke("你好小智");
+                });
+            }
+        }
+    }
+
     // 初始化按钮
     void InitializeButtons()
     {
         // 当boot_button_被点击时，执行以下操作
         boot_button_.OnClick([this]()
                              {
+            // 检查是否在开机保护期内（5秒）
+            int64_t current_time = esp_timer_get_time();
+            if (current_time - boot_time_us_ < 5000000) { // 5秒 = 5,000,000微秒
+                ESP_LOGI(TAG, "按钮保护期内，忽略点击事件");
+                return;
+            }
+            
             // 获取应用程序实例
             auto& app = Application::GetInstance();
             // 如果设备状态为kDeviceStateStarting且WifiStation未连接，则重置Wifi配置
@@ -102,8 +128,9 @@ private:
 #if (defined(CONFIG_VB6824_OTA_SUPPORT) && CONFIG_VB6824_OTA_SUPPORT == 1)
         boot_button_.OnDoubleClick([this]()
                                    {
+            // OTA功能也有类似的时间保护（20秒内有效）
             if (esp_timer_get_time() > 20 * 1000 * 1000) {
-                ESP_LOGI(TAG, "Long press, do not enter OTA mode %ld", (uint32_t)esp_timer_get_time());
+                ESP_LOGI(TAG, "超过20秒，不进入OTA模式 %ld", (uint32_t)esp_timer_get_time());
                 return;
             }
             audio_codec.OtaStart(0); });
@@ -238,6 +265,9 @@ private:
 public:
     CompactWifiBoardLCD() : boot_button_(BOOT_BUTTON_GPIO), audio_codec(CODEC_RX_GPIO, CODEC_TX_GPIO)
     {
+        // 记录开机时间
+        boot_time_us_ = esp_timer_get_time();
+        ESP_LOGI(TAG, "开机时间记录: %lld微秒", boot_time_us_);
 
 // 如果定义了CONFIG_LCD_GC9A01_160X160，则配置GPIO引脚
 #if CONFIG_LCD_GC9A01_160X160
@@ -283,6 +313,21 @@ public:
                 ResetWifiConfiguration();
             } });
         audio_codec.SetOutputVolume(100);
+        
+        // 启动定时检查任务，监控设备状态变化以实现首次自动唤醒
+        xTaskCreate([](void* param) {
+            auto* self = static_cast<CompactWifiBoardLCD*>(param);
+            while (true) {
+                self->CheckFirstIdleAutoWake();
+                vTaskDelay(pdMS_TO_TICKS(1000)); // 每秒检查一次
+                
+                // 如果已经完成首次自动唤醒，退出任务
+                if (self->first_idle_auto_wake_done_) {
+                    break;
+                }
+            }
+            vTaskDelete(NULL);
+        }, "auto_wake_monitor", 2048, this, 1, NULL);
     }
 
     virtual Led *GetLed() override
@@ -315,4 +360,4 @@ public:
 #endif
 };
 
-DECLARE_BOARD(CompactWifiBoardLCD);
+    DECLARE_BOARD(CompactWifiBoardLCD);
