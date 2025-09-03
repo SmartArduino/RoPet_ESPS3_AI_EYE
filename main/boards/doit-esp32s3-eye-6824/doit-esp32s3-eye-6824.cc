@@ -23,6 +23,7 @@
 #endif
 #include "assets/lang_config.h"
 #include <ssid_manager.h>
+#include "power_manager.h"
 
 #define TAG "CompactWifiBoardLCD"
 
@@ -34,6 +35,82 @@ LV_FONT_DECLARE(font_puhui_14_1);
 LV_FONT_DECLARE(font_awesome_14_1);
 #endif
 
+static const gc9a01_lcd_init_cmd_t vendor_specific_init_new[] = {
+    // === 你原代码里的三次“重置” ===
+    {0xA0, NULL, 0, 50},
+    {0xA0, NULL, 0, 50},
+    {0xA0, NULL, 0, 120},
+
+    // === 解锁/页切换等 ===
+    {0xFE, NULL, 0, 0},
+    {0xEF, NULL, 0, 0},
+
+    // 0x80~0x8E 全部写 0xFF
+    {0x80, (uint8_t[]){0xFF}, 1, 0},
+    {0x81, (uint8_t[]){0xFF}, 1, 0},
+    {0x82, (uint8_t[]){0xFF}, 1, 0},
+    {0x83, (uint8_t[]){0xFF}, 1, 0},
+    {0x84, (uint8_t[]){0xFF}, 1, 0},
+    {0x85, (uint8_t[]){0xFF}, 1, 0},
+    {0x86, (uint8_t[]){0xFF}, 1, 0},
+    {0x87, (uint8_t[]){0xFF}, 1, 0},
+    {0x88, (uint8_t[]){0xFF}, 1, 0},
+    {0x89, (uint8_t[]){0xFF}, 1, 0},
+    {0x8A, (uint8_t[]){0xFF}, 1, 0},
+    {0x8B, (uint8_t[]){0xFF}, 1, 0},
+    {0x8C, (uint8_t[]){0xFF}, 1, 0},
+    {0x8D, (uint8_t[]){0xFF}, 1, 0},
+    {0x8E, (uint8_t[]){0xFF}, 1, 0},
+
+    // 像素格式 16bit
+    {0x3A, (uint8_t[]){0x05}, 1, 0},
+    // ?
+    {0xEC, (uint8_t[]){0x01}, 1, 0},
+
+    // 你原来的多字节配置
+    {0x74, (uint8_t[]){0x02, 0x0E, 0x00, 0x00, 0x00, 0x00, 0x00}, 7, 0},
+    {0x98, (uint8_t[]){0x3E}, 1, 0},
+    {0x99, (uint8_t[]){0x3E}, 1, 0},
+    {0xB5, (uint8_t[]){0x0D, 0x0D}, 2, 0},
+
+    {0x60, (uint8_t[]){0x38, 0x0F, 0x79, 0x67}, 4, 0},
+    {0x61, (uint8_t[]){0x38, 0x11, 0x79, 0x67}, 4, 0},
+    {0x64, (uint8_t[]){0x38, 0x17, 0x71, 0x5F, 0x79, 0x67}, 6, 0},
+    {0x65, (uint8_t[]){0x38, 0x13, 0x71, 0x5B, 0x79, 0x67}, 6, 0},
+
+    {0x6A, (uint8_t[]){0x00, 0x00}, 2, 0},
+    {0x6C, (uint8_t[]){0x22, 0x02, 0x22, 0x02, 0x22, 0x22, 0x50}, 7, 0},
+
+    // 0x6E 共 32 字节
+    {0x6E, (uint8_t[]){0x03, 0x03, 0x01, 0x01, 0x00, 0x00, 0x0f, 0x0f, 0x0d, 0x0d, 0x0b, 0x0b, 0x09, 0x09, 0x00, 0x00, 0x00, 0x00, 0x0a, 0x0a, 0x0c, 0x0c, 0x0e, 0x0e, 0x10, 0x10, 0x00, 0x00, 0x02, 0x02, 0x04, 0x04}, 32, 0},
+
+    {0xBF, (uint8_t[]){0x01}, 1, 0},
+    {0xF9, (uint8_t[]){0x40}, 1, 0},
+    {0x9B, (uint8_t[]){0x3b, 0x33, 0x7f, 0x00}, 4, 0},
+    {0x7E, (uint8_t[]){0x30}, 1, 0},
+
+    {0x70, (uint8_t[]){0x0d, 0x02, 0x08, 0x0d, 0x02, 0x08}, 6, 0},
+    {0x71, (uint8_t[]){0x0d, 0x02, 0x08}, 3, 0},
+
+    {0x91, (uint8_t[]){0x0E, 0x09}, 2, 0},
+    {0xC3, (uint8_t[]){0x18}, 1, 0},
+    {0xC4, (uint8_t[]){0x18}, 1, 0},
+    {0xC9, (uint8_t[]){0x3c}, 1, 0},
+
+    {0xF0, (uint8_t[]){0x13, 0x15, 0x04, 0x05, 0x01, 0x38}, 6, 0},
+    {0xF2, (uint8_t[]){0x13, 0x15, 0x04, 0x05, 0x01, 0x34}, 6, 0},
+    {0xF1, (uint8_t[]){0x4b, 0xb8, 0x7b, 0x34, 0x35, 0xef}, 6, 0},
+    {0xF3, (uint8_t[]){0x47, 0xb4, 0x72, 0x34, 0x35, 0xda}, 6, 0},
+
+    // MADCTL（方向/镜像）——你原代码给 0x00，如有需要可改
+    {0x36, (uint8_t[]){0x00}, 1, 0},
+
+    // 退出休眠 / 开显示 / 内存写
+    {0x11, NULL, 0, 200},
+    {0x29, NULL, 0, 0},
+    {0x2C, NULL, 0, 0},
+};
+
 class CompactWifiBoardLCD : public WifiBoard
 {
 private:
@@ -43,6 +120,19 @@ private:
     LcdDisplay *display_;
     VbAduioCodec audio_codec;
     PowerSaveTimer *power_save_timer_;
+    PowerManager *power_manager_;
+
+    void InitializePowerManager()
+    {
+        power_manager_ = new PowerManager(GPIO_NUM_10);
+        power_manager_->OnChargingStatusChanged([this](bool is_charging)
+                                                {
+            if (is_charging) {
+                power_save_timer_->SetEnabled(false);
+            } else {
+                power_save_timer_->SetEnabled(true);
+            } });
+    }
 
     void InitializePowerSaveTimer()
     {
@@ -157,7 +247,7 @@ private:
         };
         esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)DISPLAY_SPI1_NUM, &io_config, &lcd_io);
 
-        ESP_LOGD(TAG, "Install LCD1 driver");
+        ESP_LOGI(TAG, "Install GC9A01 panel driver");
         esp_lcd_panel_dev_config_t panel_config = {
             .reset_gpio_num = GC9A01_SPI1_LCD_GPIO_RST,
             .color_space = GC9A01_LCD_COLOR_SPACE,
@@ -165,6 +255,15 @@ private:
 
         };
         panel_config.rgb_endian = DISPLAY_RGB_ORDER;
+
+#if CONFIG_LCD_GC9A01_160X160
+        gc9a01_vendor_config_t gc9107_vendor_config = {
+            .init_cmds = vendor_specific_init_new,
+            .init_cmds_size = sizeof(vendor_specific_init_new) / sizeof(gc9a01_lcd_init_cmd_t),
+        };
+        panel_config.vendor_config = &gc9107_vendor_config;
+#endif
+
         esp_lcd_new_panel_gc9a01(lcd_io, &panel_config, &lcd_panel);
 
         esp_lcd_panel_reset(lcd_panel);
@@ -269,6 +368,7 @@ public:
 
         // 初始化省电定时器
         InitializePowerSaveTimer();
+        InitializePowerManager();
 
         // 设置音频编解码器唤醒回调函数
         audio_codec.OnWakeUp([this](const std::string &command)
@@ -299,6 +399,22 @@ public:
     virtual Display *GetDisplay() override
     {
         return display_;
+    }
+
+    virtual bool GetBatteryLevel(int &level, bool &charging, bool &discharging) override
+    {
+        static bool last_discharging = false;
+        charging = power_manager_->IsCharging();
+        discharging = power_manager_->IsDischarging();
+        if (discharging != last_discharging)
+        {
+            power_save_timer_->SetEnabled(discharging);
+            last_discharging = discharging;
+        }
+        level = power_manager_->GetBatteryLevel();
+        ESP_LOGI(TAG, "Battery level: %d%%, Charging: %s, Discharging: %s",
+                 level, charging ? "true" : "false", discharging ? "true" : "false");
+        return true;
     }
 
 #if CONFIG_LCD_GC9A01_160X160

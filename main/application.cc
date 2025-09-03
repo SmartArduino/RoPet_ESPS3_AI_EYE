@@ -97,11 +97,11 @@ Application::Application()
     startTime = 0;
     timeOfLastBlink = 0;
     timeToNextBlink = 0;
-    sclera = sclera_default;
+    sclera = sclera_style_ocean_girl;
     upper = upper_default;
     lower = lower_default;
     polar = polar_default;
-    iris = iris_default;
+    iris = iris_style_ribbon;
 #endif
 
     esp_timer_create_args_t clock_timer_args = {
