@@ -56,7 +56,7 @@
 #include "eye_data/240_240/upper_lower_common.h"
 #endif
 
-#if CONFIG_USE_EYE_STYLE_ES8311
+#if CONFIG_USE_EYE_STYLE_ES8311 || CONFIG_BOARD_TYPE_DOIT_ESP32S3_EYE_6824_QSPI
 #include "touch_button.h"
 #endif
 
@@ -262,7 +262,7 @@ private:
     TaskHandle_t eye_loop_task_handle_ = NULL; // 魔眼更新任务的句柄
     // static const uint8_t ease[];
 
-#if CONFIG_USE_EYE_STYLE_ES8311
+#if CONFIG_USE_EYE_STYLE_ES8311 || CONFIG_BOARD_TYPE_DOIT_ESP32S3_EYE_6824_QSPI
     std::unique_ptr<TouchButton> touch_button_; // 按键
 #endif
 
