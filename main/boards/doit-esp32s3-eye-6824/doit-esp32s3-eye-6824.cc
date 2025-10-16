@@ -22,7 +22,8 @@
 #include "touch_button.h"
 #endif
 #include "assets/lang_config.h"
-#include "doit_blufi.h"
+#include <ssid_manager.h>
+#include "mcp_server.h"
 
 #define TAG "CompactWifiBoardLCD"
 
@@ -33,6 +34,82 @@ LV_FONT_DECLARE(font_awesome_20_4);
 LV_FONT_DECLARE(font_puhui_14_1);
 LV_FONT_DECLARE(font_awesome_14_1);
 #endif
+
+static const gc9a01_lcd_init_cmd_t vendor_specific_init_new[] = {
+    // === 你原代码里的三次“重置” ===
+    {0xA0, NULL, 0, 50},
+    {0xA0, NULL, 0, 50},
+    {0xA0, NULL, 0, 120},
+
+    // === 解锁/页切换等 ===
+    {0xFE, NULL, 0, 0},
+    {0xEF, NULL, 0, 0},
+
+    // 0x80~0x8E 全部写 0xFF
+    {0x80, (uint8_t[]){0xFF}, 1, 0},
+    {0x81, (uint8_t[]){0xFF}, 1, 0},
+    {0x82, (uint8_t[]){0xFF}, 1, 0},
+    {0x83, (uint8_t[]){0xFF}, 1, 0},
+    {0x84, (uint8_t[]){0xFF}, 1, 0},
+    {0x85, (uint8_t[]){0xFF}, 1, 0},
+    {0x86, (uint8_t[]){0xFF}, 1, 0},
+    {0x87, (uint8_t[]){0xFF}, 1, 0},
+    {0x88, (uint8_t[]){0xFF}, 1, 0},
+    {0x89, (uint8_t[]){0xFF}, 1, 0},
+    {0x8A, (uint8_t[]){0xFF}, 1, 0},
+    {0x8B, (uint8_t[]){0xFF}, 1, 0},
+    {0x8C, (uint8_t[]){0xFF}, 1, 0},
+    {0x8D, (uint8_t[]){0xFF}, 1, 0},
+    {0x8E, (uint8_t[]){0xFF}, 1, 0},
+
+    // 像素格式 16bit
+    {0x3A, (uint8_t[]){0x05}, 1, 0},
+    // ?
+    {0xEC, (uint8_t[]){0x01}, 1, 0},
+
+    // 你原来的多字节配置
+    {0x74, (uint8_t[]){0x02, 0x0E, 0x00, 0x00, 0x00, 0x00, 0x00}, 7, 0},
+    {0x98, (uint8_t[]){0x3E}, 1, 0},
+    {0x99, (uint8_t[]){0x3E}, 1, 0},
+    {0xB5, (uint8_t[]){0x0D, 0x0D}, 2, 0},
+
+    {0x60, (uint8_t[]){0x38, 0x0F, 0x79, 0x67}, 4, 0},
+    {0x61, (uint8_t[]){0x38, 0x11, 0x79, 0x67}, 4, 0},
+    {0x64, (uint8_t[]){0x38, 0x17, 0x71, 0x5F, 0x79, 0x67}, 6, 0},
+    {0x65, (uint8_t[]){0x38, 0x13, 0x71, 0x5B, 0x79, 0x67}, 6, 0},
+
+    {0x6A, (uint8_t[]){0x00, 0x00}, 2, 0},
+    {0x6C, (uint8_t[]){0x22, 0x02, 0x22, 0x02, 0x22, 0x22, 0x50}, 7, 0},
+
+    // 0x6E 共 32 字节
+    {0x6E, (uint8_t[]){0x03, 0x03, 0x01, 0x01, 0x00, 0x00, 0x0f, 0x0f, 0x0d, 0x0d, 0x0b, 0x0b, 0x09, 0x09, 0x00, 0x00, 0x00, 0x00, 0x0a, 0x0a, 0x0c, 0x0c, 0x0e, 0x0e, 0x10, 0x10, 0x00, 0x00, 0x02, 0x02, 0x04, 0x04}, 32, 0},
+
+    {0xBF, (uint8_t[]){0x01}, 1, 0},
+    {0xF9, (uint8_t[]){0x40}, 1, 0},
+    {0x9B, (uint8_t[]){0x3b, 0x33, 0x7f, 0x00}, 4, 0},
+    {0x7E, (uint8_t[]){0x30}, 1, 0},
+
+    {0x70, (uint8_t[]){0x0d, 0x02, 0x08, 0x0d, 0x02, 0x08}, 6, 0},
+    {0x71, (uint8_t[]){0x0d, 0x02, 0x08}, 3, 0},
+
+    {0x91, (uint8_t[]){0x0E, 0x09}, 2, 0},
+    {0xC3, (uint8_t[]){0x18}, 1, 0},
+    {0xC4, (uint8_t[]){0x18}, 1, 0},
+    {0xC9, (uint8_t[]){0x3c}, 1, 0},
+
+    {0xF0, (uint8_t[]){0x13, 0x15, 0x04, 0x05, 0x01, 0x38}, 6, 0},
+    {0xF2, (uint8_t[]){0x13, 0x15, 0x04, 0x05, 0x01, 0x34}, 6, 0},
+    {0xF1, (uint8_t[]){0x4b, 0xb8, 0x7b, 0x34, 0x35, 0xef}, 6, 0},
+    {0xF3, (uint8_t[]){0x47, 0xb4, 0x72, 0x34, 0x35, 0xda}, 6, 0},
+
+    // MADCTL（方向/镜像）——你原代码给 0x00，如有需要可改
+    {0x36, (uint8_t[]){0x00}, 1, 0},
+
+    // 退出休眠 / 开显示 / 内存写
+    {0x11, NULL, 0, 200},
+    {0x29, NULL, 0, 0},
+    {0x2C, NULL, 0, 0},
+};
 
 class CompactWifiBoardLCD : public WifiBoard
 {
@@ -86,12 +163,9 @@ private:
                              {
             // 获取应用程序实例
             auto& app = Application::GetInstance();
-            // 如果设备状态为kDeviceStateStarting且WifiStation未连接，则重置Wifi配置
-            if (app.GetDeviceState() == kDeviceStateStarting && !WifiStation::GetInstance().IsConnected()) {
-                ResetWifiConfiguration();
-            }
             // 切换聊天状态
             app.ToggleChatState(); });
+
         boot_button_.OnPressRepeat([this](uint16_t count)
                                    {
             if(count >= 3){
@@ -156,7 +230,8 @@ private:
         };
         esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)DISPLAY_SPI1_NUM, &io_config, &lcd_io);
 
-        ESP_LOGD(TAG, "Install LCD1 driver");
+        ESP_LOGI(TAG, "Install GC9A01 panel driver");
+
         esp_lcd_panel_dev_config_t panel_config = {
             .reset_gpio_num = GC9A01_SPI1_LCD_GPIO_RST,
             .color_space = GC9A01_LCD_COLOR_SPACE,
@@ -164,6 +239,14 @@ private:
 
         };
         panel_config.rgb_endian = DISPLAY_RGB_ORDER;
+
+#if CONFIG_LCD_GC9A01_160X160
+        gc9a01_vendor_config_t gc9107_vendor_config = {
+            .init_cmds = vendor_specific_init_new,
+            .init_cmds_size = sizeof(vendor_specific_init_new) / sizeof(gc9a01_lcd_init_cmd_t),
+        };
+        panel_config.vendor_config = &gc9107_vendor_config;
+#endif
         esp_lcd_new_panel_gc9a01(lcd_io, &panel_config, &lcd_panel);
 
         esp_lcd_panel_reset(lcd_panel);
@@ -184,85 +267,78 @@ private:
                                      });
     }
 
-    virtual void StartNetwork() override
+    // virtual void StartNetwork() override
+    // {
+
+    //     // User can press BOOT button while starting to enter WiFi configuration mode
+    //     if (wifi_config_mode_)
+    //     {
+    //         EnterWifiConfigMode();
+    //         return;
+    //     }
+
+    //     // If no WiFi SSID is configured, enter WiFi configuration mode
+    //     auto &ssid_manager = SsidManager::GetInstance();
+    //     auto ssid_list = ssid_manager.GetSsidList();
+    //     if (ssid_list.empty())
+    //     {
+    //         wifi_config_mode_ = true;
+    //         EnterWifiConfigMode();
+    //         return;
+    //     }
+
+    //     auto &wifi_station = WifiStation::GetInstance();
+    //     wifi_station.OnScanBegin([this]()
+    //                              {
+    //     auto display = Board::GetInstance().GetDisplay();
+    //     display->ShowNotification(Lang::Strings::SCANNING_WIFI, 30000); });
+    //     wifi_station.OnConnect([this](const std::string &ssid)
+    //                            {
+    //     auto display = Board::GetInstance().GetDisplay();
+    //     std::string notification = Lang::Strings::CONNECT_TO;
+    //     notification += ssid;
+    //     notification += "...";
+    //     display->ShowNotification(notification.c_str(), 30000); });
+    //     wifi_station.OnConnected([this](const std::string &ssid)
+    //                              {
+    //                                  auto display = Board::GetInstance().GetDisplay();
+    //                                  std::string notification = Lang::Strings::CONNECTED_TO;
+    //                                  notification += ssid;
+    //                                  display->ShowNotification(notification.c_str(), 30000); });
+    //     wifi_station.Start();
+
+    //     // Try to connect to WiFi, if failed, launch the WiFi configuration AP
+    //     if (!wifi_station.WaitForConnected(60 * 1000))
+    //     {
+    //         wifi_station.Stop();
+    //         wifi_config_mode_ = true;
+    //         EnterWifiConfigMode();
+    //         return;
+    //     }
+    // }
+
+#if CONFIG_USE_ANIM_EYE
+    void InitializeTools()
     {
-        Ota ota_;
-        // User can press BOOT button while starting to enter WiFi configuration mode
-        uint8_t is_config = 0;
-        bool has_config = blufi_storage_read_has_config();
-
-        auto display = Board::GetInstance().GetDisplay();
-        if (has_config == 0)
-        {
-            // If not configured, enter WiFi configuration mode
-            EnterWifiConfigMode();
-        }
-        else
-        {
-            // Otherwise, start the WiFi station
-            is_config = 1;
-
-            // auto& wifi_station = WifiStation::GetInstance();
-            // wifi_station.Start();
-            blufi_wifi_start_connect();
-            std::string notification = Lang::Strings::CONNECT_TO;
-            notification += "wifi";
-            notification += "...";
-            display->ShowNotification(notification.c_str(), 30000);
-        }
-
-        const int MAX_RETRY = 3;
-        int retry_count = 0;
-        int retry_delay = 10; // 初始重试延迟为10秒
-        uint8_t wait_cnt = 0;
-        while (1)
-        {
-            wait_cnt += 1;
-            vTaskDelay(pdMS_TO_TICKS(1000));
-            if (blufi_wifi_sta_get_connect_status())
-            {
-                if (is_config == 0)
-                {
-                    vTaskDelay(pdMS_TO_TICKS(100));
-                    if (!ota_.CheckVersion())
-                    {
-                        retry_count++;
-                        if (retry_count >= MAX_RETRY)
-                        {
-                            ESP_LOGE(TAG, "Too many retries, exit version check");
-                            return;
-                        }
-
-                        ESP_LOGW(TAG, "Check new version failed, retry in %d seconds (%d/%d)", retry_delay, retry_count, MAX_RETRY);
-                        for (int i = 0; i < retry_delay; i++)
-                        {
-                            vTaskDelay(pdMS_TO_TICKS(1000));
-                        }
-                        retry_delay *= 2; // 每次重试后延迟时间翻倍
-                        continue;
-                    }
-                    auto &message = ota_.GetActivationMessage();
-                    auto &code = ota_.GetActivationCode();
-                    ESP_LOGI(TAG, "Activation code: %s", code.c_str());
-                    doit_blufi_send_code((uint8_t *)code.c_str());
-                    esp_restart();
-                    // esp_restart();
-                }
-                break;
-            }
-
-            if (wait_cnt > 180)
-            { // 3 minutes
-                EnterWifiConfigMode();
-                return;
-            }
-        }
-
-        std::string conn_notification = Lang::Strings::CONNECTED_TO;
-        display->ShowNotification(conn_notification.c_str(), 30000);
-
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        auto &mcp_server = McpServer::GetInstance();
+        // mcp_server.AddTool("self.screen.set_eye_theme",
+        //                    "Set the eye theme of the screen. Available themes:ocean、love heart、 dream、 rainbow.The names of the eyes that are issued can only be one of the four listed above.",
+        mcp_server.AddTool("self.screen.set_eye_theme",
+                           "Set the eye theme of the screen. Available themes:海洋、爱心、 梦境、 彩虹.The names of the eyes that are issued can only be one of the four listed above.",
+                           PropertyList({Property("eye_name", kPropertyTypeString)}),
+                           [](const PropertyList &properties) -> ReturnValue
+                           {
+                               std::string theme_name = properties["eye_name"].value<std::string>();
+                               auto display = Board::GetInstance().GetDisplay();
+                               if (display)
+                               {
+                                   ESP_LOGI(TAG, "Set eye theme: %s", theme_name.c_str());
+                                   display->SetEyeTheme(theme_name);
+                               }
+                               return true;
+                           });
     }
+#endif
 
 public:
     CompactWifiBoardLCD() : boot_button_(BOOT_BUTTON_GPIO), audio_codec(CODEC_RX_GPIO, CODEC_TX_GPIO)
@@ -296,9 +372,6 @@ public:
         // 设置SLEEP_GOIO引脚电平为高
         gpio_set_level(SLEEP_GOIO, 1);
 
-        // 初始化省电定时器
-        InitializePowerSaveTimer();
-
         // 设置音频编解码器唤醒回调函数
         audio_codec.OnWakeUp([this](const std::string &command)
                              {
@@ -312,6 +385,8 @@ public:
                 ResetWifiConfiguration();
             } });
         audio_codec.SetOutputVolume(100);
+
+        // InitializeTools();
     }
 
     virtual Led *GetLed() override
@@ -324,7 +399,6 @@ public:
     {
         return &audio_codec;
     }
-
     virtual Display *GetDisplay() override
     {
         return display_;
