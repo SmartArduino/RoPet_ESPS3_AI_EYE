@@ -10,7 +10,6 @@
 #include "assets/lang_config.h"
 #include <cstring>
 #include "settings.h"
-
 #include "board.h"
 
 #if CONFIG_USE_EYE_STYLE_ES8311 || CONFIG_USE_EYE_STYLE_VB6824
@@ -118,7 +117,7 @@ SpiLcdDisplay::SpiLcdDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_h
     : LcdDisplay(panel_io, panel, fonts, width, height)
 {
 
-#if CONFIG_USE_EYE_STYLE_ES8311 || CONFIG_USE_EYE_STYLE_VB6824 || CONFIG_USE_EYE_STYLE_VB6824_DIFF // 魔眼
+#if CONFIG_USE_EYE_STYLE_ES8311 || CONFIG_USE_EYE_STYLE_VB6824
 
 #else
     // draw white

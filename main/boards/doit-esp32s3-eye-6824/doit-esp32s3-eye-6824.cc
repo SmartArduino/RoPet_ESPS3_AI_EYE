@@ -176,10 +176,6 @@ private:
                              {
             // 获取应用程序实例
             auto& app = Application::GetInstance();
-            // 如果设备状态为kDeviceStateStarting且WifiStation未连接，则重置Wifi配置
-            if (app.GetDeviceState() == kDeviceStateStarting && !WifiStation::GetInstance().IsConnected()) {
-                ResetWifiConfiguration();
-            }
             // 切换聊天状态
             app.ToggleChatState(); });
 
