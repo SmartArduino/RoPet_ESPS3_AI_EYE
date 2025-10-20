@@ -20,9 +20,12 @@
 #include <wifi_station.h>
 #include <wifi_configuration_ap.h>
 #include <ssid_manager.h>
-//==================blufi=====================
-#include "doit_blufi.h"
-//============================================
+
+#ifdef CONFIG_USE_BLUFI_NET_CONFIGURING
+#include "esp_mac.h"
+#include "blufi_wificfg.h"
+#endif
+
 static const char *TAG = "WifiBoard";
 
 WifiBoard::WifiBoard()
@@ -43,159 +46,174 @@ std::string WifiBoard::GetBoardType()
 
 void WifiBoard::EnterWifiConfigMode()
 {
+#ifdef CONFIG_USE_BLUFI_NET_CONFIGURING
+
+    ble_active_ = true; // 设置蓝牙为活跃状态
+
+    bool is_got_ip = false;
+    esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, [](void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
+                               {
+        bool *is_got_ip = (bool *)arg;
+        *is_got_ip = true; }, &is_got_ip);
+
+    uint8_t mac[6];
+    static char blufi_device_name[18];
+    esp_read_mac(mac, ESP_MAC_WIFI_STA);
+    snprintf(blufi_device_name, sizeof(blufi_device_name), "DTXZ_%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+    blufi_wificfg_cbs_t cbs = {
+        .sta_config_cb = [](const wifi_config_t *config, void *arg)
+        {
+            ESP_LOGI(TAG, "Received sta config, ssid: %s, password: %s", config->sta.ssid, config->sta.password);
+            std::string ssid(reinterpret_cast<const char*>(config->sta.ssid));
+            std::string password(reinterpret_cast<const char*>(config->sta.password));
+            SsidManager::GetInstance().AddSsid(ssid, password); },
+        .custom_data_cb = [](const uint8_t *data, size_t len, void *arg)
+        {
+            ESP_LOGI(TAG, "Received custom data: %.*s", (int)len, data);
+            if (strncmp((char *)data, "AT+OTA=", 7) == 0) {
+                std::string url(reinterpret_cast<const char*>(data+7), len-7);
+                ESP_LOGI(TAG, "ota_url: %s", url.c_str());
+                Settings settings("wifi", true);
+                settings.SetString("ota_url", url);
+            } }};
+
     auto &application = Application::GetInstance();
     application.SetDeviceState(kDeviceStateWifiConfiguring);
-    //=============================blufi=============================
-    // auto& wifi_ap = WifiConfigurationAp::GetInstance();
-    // wifi_ap.SetLanguage(Lang::CODE);
-    // wifi_ap.SetSsidPrefix("Xiaozhi");
-    // wifi_ap.Start();
+    static char mac_str[18];
+    snprintf(mac_str, sizeof(mac_str), "%02x:%02x:%02x:%02x:%02x:%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    std::string msg = std::string(mac_str) + "\r\n" + "网络配置中";
+    application.Alert(Lang::Strings::WIFI_CONFIG_MODE, msg.c_str(), "", Lang::Sounds::P3_WIFICONFIG);
 
-    // // 显示 WiFi 配置 AP 的 SSID 和 Web 服务器 URL
-    // std::string hint = Lang::Strings::CONNECT_TO_HOTSPOT;
-    // hint += wifi_ap.GetSsid();
-    // hint += Lang::Strings::ACCESS_VIA_BROWSER;
-    // hint += wifi_ap.GetWebServerUrl();
-    doit_blufi_init();
+    vTaskDelay(pdMS_TO_TICKS(2000));
+    application.ReleaseDecoder();
+
+    blufi_wificfg_start(true, blufi_device_name, cbs, this);
+
+    while (!is_got_ip)
+    {
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+
+    Ota ota;
+    const int MAX_RETRY = 10;
+    int retry_count = 0;
+    int retry_delay = 10; // 初始重试延迟为10秒
+    while (true)
+    {
+        if (!ota.CheckVersion())
+        {
+            retry_count++;
+            if (retry_count >= MAX_RETRY)
+            {
+                ESP_LOGE(TAG, "Too many retries, exit version check");
+                ResetWifiConfiguration();
+                return;
+            }
+
+            ESP_LOGW(TAG, "Check new version failed, retry in %d seconds (%d/%d)", retry_delay, retry_count, MAX_RETRY);
+            for (int i = 0; i < retry_delay; i++)
+            {
+                vTaskDelay(pdMS_TO_TICKS(1000));
+            }
+            retry_delay *= 2; // 每次重试后延迟时间翻倍
+            continue;
+        }
+
+        auto &code = ota.GetActivationCode();
+        ESP_LOGI(TAG, "Activation code: %s", code.c_str());
+        if (!code.empty())
+        {
+            blufi_wificfg_send_custom((uint8_t *)code.c_str(), code.length());
+        }
+        else
+        {
+            uint8_t data[6] = {0};
+            blufi_wificfg_send_custom(data, 6);
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(200));
+        ble_active_ = false; // 设置蓝牙为非活跃状态
+        esp_restart();
+    }
+#else
+    auto &application = Application::GetInstance();
+    application.SetDeviceState(kDeviceStateWifiConfiguring);
+
+    auto &wifi_ap = WifiConfigurationAp::GetInstance();
+    wifi_ap.SetLanguage(Lang::CODE);
+    wifi_ap.SetSsidPrefix("Xiaozhi");
+    wifi_ap.Start();
+
     // 显示 WiFi 配置 AP 的 SSID 和 Web 服务器 URL
-    std::string hint = "使用小程序添加设备";
+    std::string hint = Lang::Strings::CONNECT_TO_HOTSPOT;
+    hint += wifi_ap.GetSsid();
+    hint += Lang::Strings::ACCESS_VIA_BROWSER;
+    hint += wifi_ap.GetWebServerUrl();
     hint += "\n\n";
 
     // 播报配置 WiFi 的提示
     application.Alert(Lang::Strings::WIFI_CONFIG_MODE, hint.c_str(), "", Lang::Sounds::P3_WIFICONFIG);
 
     // Wait forever until reset after configuration
-    // while (true) {
-    //     int free_sram = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
-    //     int min_free_sram = heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL);
-    //     ESP_LOGI(TAG, "Free internal: %u minimal internal: %u", free_sram, min_free_sram);
-    //     vTaskDelay(pdMS_TO_TICKS(10000));
-    // }
+    while (true)
+    {
+        int free_sram = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+        int min_free_sram = heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL);
+        ESP_LOGI(TAG, "Free internal: %u minimal internal: %u", free_sram, min_free_sram);
+        vTaskDelay(pdMS_TO_TICKS(10000));
+    }
+#endif
 }
-Ota ota_;
 
-//==================================blufi==================================
 void WifiBoard::StartNetwork()
 {
-    // // User can press BOOT button while starting to enter WiFi configuration mode
-    // if (wifi_config_mode_) {
-    //     EnterWifiConfigMode();
-    //     return;
-    // }
-
-    // // If no WiFi SSID is configured, enter WiFi configuration mode
-    // auto& ssid_manager = SsidManager::GetInstance();
-    // auto ssid_list = ssid_manager.GetSsidList();
-    // if (ssid_list.empty()) {
-    //     wifi_config_mode_ = true;
-    //     EnterWifiConfigMode();
-    //     return;
-    // }
-
-    // auto& wifi_station = WifiStation::GetInstance();
-    // wifi_station.OnScanBegin([this]() {
-    //     auto display = Board::GetInstance().GetDisplay();
-    //     display->ShowNotification(Lang::Strings::SCANNING_WIFI, 30000);
-    // });
-    // wifi_station.OnConnect([this](const std::string& ssid) {
-    //     auto display = Board::GetInstance().GetDisplay();
-    //     std::string notification = Lang::Strings::CONNECT_TO;
-    //     notification += ssid;
-    //     notification += "...";
-    //     display->ShowNotification(notification.c_str(), 30000);
-    // });
-    // wifi_station.OnConnected([this](const std::string& ssid) {
-    //     auto display = Board::GetInstance().GetDisplay();
-    //     std::string notification = Lang::Strings::CONNECTED_TO;
-    //     notification += ssid;
-    //     display->ShowNotification(notification.c_str(), 30000);
-    // });
-    // wifi_station.Start();
-
-    // // Try to connect to WiFi, if failed, launch the WiFi configuration AP
-    // if (!wifi_station.WaitForConnected(60 * 1000)) {
-    //     wifi_station.Stop();
-    //     wifi_config_mode_ = true;
-    //     EnterWifiConfigMode();
-    //     return;
-    // }
     // User can press BOOT button while starting to enter WiFi configuration mode
-    uint8_t is_config = 0;
-    bool has_config = blufi_storage_read_has_config();
-
-    auto display = Board::GetInstance().GetDisplay();
-    if (has_config == 0)
+    if (wifi_config_mode_)
     {
-        // If not configured, enter WiFi configuration mode
         EnterWifiConfigMode();
+        return;
     }
-    else
-    {
-        // Otherwise, start the WiFi station
-        is_config = 1;
 
-        // auto& wifi_station = WifiStation::GetInstance();
-        // wifi_station.Start();
-        blufi_wifi_start_connect();
+    // If no WiFi SSID is configured, enter WiFi configuration mode
+    auto &ssid_manager = SsidManager::GetInstance();
+    auto ssid_list = ssid_manager.GetSsidList();
+    if (ssid_list.empty())
+    {
+        wifi_config_mode_ = true;
+        EnterWifiConfigMode();
+        return;
+    }
+
+    auto &wifi_station = WifiStation::GetInstance();
+    wifi_station.OnScanBegin([this]()
+                             {
+        auto display = Board::GetInstance().GetDisplay();
+        display->ShowNotification(Lang::Strings::SCANNING_WIFI, 30000); });
+    wifi_station.OnConnect([this](const std::string &ssid)
+                           {
+        auto display = Board::GetInstance().GetDisplay();
         std::string notification = Lang::Strings::CONNECT_TO;
-        notification += "wifi";
+        notification += ssid;
         notification += "...";
-        display->ShowNotification(notification.c_str(), 30000);
-    }
+        display->ShowNotification(notification.c_str(), 30000); });
+    wifi_station.OnConnected([this](const std::string &ssid)
+                             {
+        auto display = Board::GetInstance().GetDisplay();
+        std::string notification = Lang::Strings::CONNECTED_TO;
+        notification += ssid;
+        display->ShowNotification(notification.c_str(), 30000); });
+    wifi_station.Start();
 
-    const int MAX_RETRY = 3;
-    int retry_count = 0;
-    int retry_delay = 10; // 初始重试延迟为10秒
-    uint8_t wait_cnt = 0;
-    while (1)
+    // Try to connect to WiFi, if failed, launch the WiFi configuration AP
+    if (!wifi_station.WaitForConnected(60 * 1000))
     {
-        wait_cnt += 1;
-        vTaskDelay(pdMS_TO_TICKS(1000));
-        if (blufi_wifi_sta_get_connect_status())
-        {
-            if (is_config == 0)
-            {
-                vTaskDelay(pdMS_TO_TICKS(100));
-                if (!ota_.CheckVersion())
-                {
-                    retry_count++;
-                    if (retry_count >= MAX_RETRY)
-                    {
-                        ESP_LOGE(TAG, "Too many retries, exit version check");
-                        return;
-                    }
-
-                    ESP_LOGW(TAG, "Check new version failed, retry in %d seconds (%d/%d)", retry_delay, retry_count, MAX_RETRY);
-                    for (int i = 0; i < retry_delay; i++)
-                    {
-                        vTaskDelay(pdMS_TO_TICKS(1000));
-                    }
-                    retry_delay *= 2; // 每次重试后延迟时间翻倍
-                    continue;
-                }
-                auto &message = ota_.GetActivationMessage();
-                auto &code = ota_.GetActivationCode();
-                ESP_LOGI(TAG, "Activation code: %s", code.c_str());
-                doit_blufi_send_code((uint8_t *)code.c_str());
-                esp_restart();
-                // esp_restart();
-            }
-            break;
-        }
-
-        if (wait_cnt > 180)
-        { // 3 minutes
-            EnterWifiConfigMode();
-            return;
-        }
+        wifi_station.Stop();
+        wifi_config_mode_ = true;
+        EnterWifiConfigMode();
+        return;
     }
-
-    std::string conn_notification = Lang::Strings::CONNECTED_TO;
-    display->ShowNotification(conn_notification.c_str(), 30000);
-
-    vTaskDelay(pdMS_TO_TICKS(1000));
 }
-//======================================================================
 
 Http *WifiBoard::CreateHttp()
 {
@@ -253,6 +271,11 @@ const char *WifiBoard::GetNetworkStateIcon()
     }
 }
 
+const char *WifiBoard::GetBleStateIcon()
+{
+    return ble_active_ ? FONT_AWESOME_BLUETOOTH : "";
+}
+
 std::string WifiBoard::GetBoardJson()
 {
     // Set the board type for OTA
@@ -282,9 +305,6 @@ void WifiBoard::ResetWifiConfiguration()
     {
         Settings settings("wifi", true);
         settings.SetInt("force_ap", 1);
-        //==================================blufi==================================
-        blufi_storage_write_has_config(false);
-        //==========================================================================
     }
     GetDisplay()->ShowNotification(Lang::Strings::ENTERING_WIFI_CONFIG_MODE);
     vTaskDelay(pdMS_TO_TICKS(1000));

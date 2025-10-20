@@ -365,6 +365,20 @@ choice DISPLAY_ESP32S3_KORVO2_V3
         bool "ILI9341, 分辨率240*320"
 endchoice
 
+choice
+    prompt "Net Configuration Mode"
+    default USE_SOFTAP_NET_CONFIGURING
+    help
+        Select net configuration
+
+    config USE_SOFTAP_NET_CONFIGURING
+        bool "SoftAP"
+    config USE_BLUFI_NET_CONFIGURING
+        select BLUFI_WIFICFG_ENABLED
+        bool "Blufi"
+endchoice
+
+
 config USE_EYE_STYLE_ES8311
     bool "使用魔眼界面风格(ES8311)"
     default n

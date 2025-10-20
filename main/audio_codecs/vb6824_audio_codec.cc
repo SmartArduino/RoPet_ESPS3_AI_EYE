@@ -20,9 +20,6 @@
 #include <sstream>
 
 #include "vb6824.h"
-//==================blufi=====================
-#include "doit_blufi.h"
-//===========================================
 
 static const char *TAG = "VbAduioCodec";
 
@@ -101,16 +98,14 @@ int VbAduioCodec::OtaStart(uint8_t mode)
     auto &wifi_station = WifiStation::GetInstance();
     const std::string ip = wifi_station.GetIpAddress();
     std::string code = GenDevCode();
-    //==================blufi=====================
-    // if(!wifi_station.IsConnected() || app.GetDeviceState() == kDeviceStateActivating) {
-    if (!blufi_storage_read_has_config() || app.GetDeviceState() == kDeviceStateActivating)
+    if (!wifi_station.IsConnected() || app.GetDeviceState() == kDeviceStateActivating)
     {
-        //============================================
         vTaskDelay(pdMS_TO_TICKS(1000));
         app.Schedule([this]()
                      { this->OtaStart(1); });
         return OTA_OK;
     }
+
     if (jl_ws_is_start() == 1)
     {
         app.ShowOtaInfo(code, ip);

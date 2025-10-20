@@ -9,17 +9,18 @@
 
 #include "freertos/timers.h"
 
-class VbAduioCodec : public AudioCodec {
+class VbAduioCodec : public AudioCodec
+{
 private:
     void ready();
     void WakeUp(std::string command);
-    virtual int Read(int16_t* dest, int samples) override;
+    virtual int Read(int16_t *dest, int samples) override;
 #ifdef CONFIG_USE_AUDIO_CODEC_ENCODE_OPUS
-    virtual int Read(uint8_t* dest, int samples) override;
+    virtual int Read(uint8_t *dest, int samples) override;
 #endif
-    virtual int Write(const int16_t* data, int samples) override;
+    virtual int Write(const int16_t *data, int samples) override;
 #ifdef CONFIG_USE_AUDIO_CODEC_DECODE_OPUS
-    virtual int Write(uint8_t* opus, int samples) override;
+    virtual int Write(uint8_t *opus, int samples) override;
 #endif
     std::function<void(std::string)> on_wake_up_;
     bool frist_volume_is_set = false;
@@ -32,13 +33,14 @@ public:
     void SetOutputVolume(int volume) override;
     virtual void Start() override;
 #ifdef CONFIG_USE_AUDIO_CODEC_ENCODE_OPUS
-    virtual bool InputData(std::vector<uint8_t>& opus) override;
+    virtual bool InputData(std::vector<uint8_t> &opus) override;
 #endif
-    virtual void EnableInput(bool enable) override; 
-    virtual void EnableOutput(bool enable) override; 
-    int OtaStart(uint8_t mode=0);
+    virtual void EnableInput(bool enable) override;
+    virtual void EnableOutput(bool enable) override;
+    int OtaStart(uint8_t mode = 0);
     bool InOtaMode(bool reShowIfInOta);
-    enum{
+    enum
+    {
         OTA_ERR_NOT_CONNECTED = 0,
         OTA_ERR_NOT_SUPPORT = 1,
         OTA_ERR_IN_OTA_MODE = 2,
