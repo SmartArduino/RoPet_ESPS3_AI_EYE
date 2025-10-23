@@ -259,9 +259,7 @@ private:
         };
         panel_config.vendor_config = &gc9107_vendor_config;
 #endif
-
         esp_lcd_new_panel_gc9a01(lcd_io, &panel_config, &lcd_panel);
-
         esp_lcd_panel_reset(lcd_panel);
         esp_lcd_panel_init(lcd_panel);
         esp_lcd_panel_invert_color(lcd_panel, DISPLAY_COLOR_INVERT);
@@ -280,55 +278,55 @@ private:
                                      });
     }
 
-    virtual void StartNetwork() override
-    {
+    // virtual void StartNetwork() override
+    // {
 
-        // User can press BOOT button while starting to enter WiFi configuration mode
-        if (wifi_config_mode_)
-        {
-            EnterWifiConfigMode();
-            return;
-        }
+    //     // User can press BOOT button while starting to enter WiFi configuration mode
+    //     if (wifi_config_mode_)
+    //     {
+    //         EnterWifiConfigMode();
+    //         return;
+    //     }
 
-        // If no WiFi SSID is configured, enter WiFi configuration mode
-        auto &ssid_manager = SsidManager::GetInstance();
-        auto ssid_list = ssid_manager.GetSsidList();
-        if (ssid_list.empty())
-        {
-            wifi_config_mode_ = true;
-            EnterWifiConfigMode();
-            return;
-        }
+    //     // If no WiFi SSID is configured, enter WiFi configuration mode
+    //     auto &ssid_manager = SsidManager::GetInstance();
+    //     auto ssid_list = ssid_manager.GetSsidList();
+    //     if (ssid_list.empty())
+    //     {
+    //         wifi_config_mode_ = true;
+    //         EnterWifiConfigMode();
+    //         return;
+    //     }
 
-        auto &wifi_station = WifiStation::GetInstance();
-        wifi_station.OnScanBegin([this]()
-                                 {
-        auto display = Board::GetInstance().GetDisplay();
-        display->ShowNotification(Lang::Strings::SCANNING_WIFI, 30000); });
-        wifi_station.OnConnect([this](const std::string &ssid)
-                               {
-        auto display = Board::GetInstance().GetDisplay();
-        std::string notification = Lang::Strings::CONNECT_TO;
-        notification += ssid;
-        notification += "...";
-        display->ShowNotification(notification.c_str(), 30000); });
-        wifi_station.OnConnected([this](const std::string &ssid)
-                                 {
-                                     auto display = Board::GetInstance().GetDisplay();
-                                     std::string notification = Lang::Strings::CONNECTED_TO;
-                                     notification += ssid;
-                                     display->ShowNotification(notification.c_str(), 30000); });
-        wifi_station.Start();
+    //     auto &wifi_station = WifiStation::GetInstance();
+    //     wifi_station.OnScanBegin([this]()
+    //                              {
+    //     auto display = Board::GetInstance().GetDisplay();
+    //     display->ShowNotification(Lang::Strings::SCANNING_WIFI, 30000); });
+    //     wifi_station.OnConnect([this](const std::string &ssid)
+    //                            {
+    //     auto display = Board::GetInstance().GetDisplay();
+    //     std::string notification = Lang::Strings::CONNECT_TO;
+    //     notification += ssid;
+    //     notification += "...";
+    //     display->ShowNotification(notification.c_str(), 30000); });
+    //     wifi_station.OnConnected([this](const std::string &ssid)
+    //                              {
+    //                                  auto display = Board::GetInstance().GetDisplay();
+    //                                  std::string notification = Lang::Strings::CONNECTED_TO;
+    //                                  notification += ssid;
+    //                                  display->ShowNotification(notification.c_str(), 30000); });
+    //     wifi_station.Start();
 
-        // Try to connect to WiFi, if failed, launch the WiFi configuration AP
-        if (!wifi_station.WaitForConnected(60 * 1000))
-        {
-            wifi_station.Stop();
-            wifi_config_mode_ = true;
-            EnterWifiConfigMode();
-            return;
-        }
-    }
+    //     // Try to connect to WiFi, if failed, launch the WiFi configuration AP
+    //     if (!wifi_station.WaitForConnected(60 * 1000))
+    //     {
+    //         wifi_station.Stop();
+    //         wifi_config_mode_ = true;
+    //         EnterWifiConfigMode();
+    //         return;
+    //     }
+    // }
 
 public:
     CompactWifiBoardLCD() : boot_button_(BOOT_BUTTON_GPIO), audio_codec(CODEC_RX_GPIO, CODEC_TX_GPIO)
