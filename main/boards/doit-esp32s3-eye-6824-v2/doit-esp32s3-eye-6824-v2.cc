@@ -6,7 +6,6 @@
 #include "application.h"
 #include "button.h"
 #include "config.h"
-#include "iot/thing_manager.h"
 #include "led/single_led.h"
 #include "power_save_timer.h"
 
@@ -105,16 +104,6 @@ private:
                                               ESP_LOGI(TAG, "重新配网");
                                               ResetWifiConfiguration();
                                           } });
-    }
-
-    // 物联网初始化，添加对 AI 可见设备
-    void
-    InitializeIot()
-    {
-        auto &thing_manager = iot::ThingManager::GetInstance();
-        thing_manager.AddThing(iot::CreateThing("Speaker"));
-        thing_manager.AddThing(iot::CreateThing("Screen"));
-        // thing_manager.AddThing(iot::CreateThing("Lamp"));
     }
 
     void InitializeSpi()
@@ -223,6 +212,11 @@ private:
         panel_config.rgb_endian = DISPLAY_RGB_ORDER;
         ESP_ERROR_CHECK(esp_lcd_new_panel_gc9a01(panel_io, &panel_config, &panel));
 #elif CONFIG_LCD_GC9A01_160X160
+        esp_lcd_panel_dev_config_t panel_config = {
+            .reset_gpio_num = SPI_LCD_GPIO_RST,
+            .color_space = ESP_LCD_COLOR_SPACE_RGB,
+            .bits_per_pixel = 16};
+        panel_config.rgb_endian = DISPLAY_RGB_ORDER;
         gc9a01_vendor_config_t gc9107_vendor_config = {
             .init_cmds = vendor_specific_init_new,
             .init_cmds_size = sizeof(vendor_specific_init_new) / sizeof(gc9a01_lcd_init_cmd_t),
@@ -488,12 +482,12 @@ public:
         gpio_set_level(SLEEP_GOIO, 1);
         // 如果定义了CONFIG_LCD_GC9A01_160X160，则配置GPIO引脚
         // 初始化SPI
-        // InitializeSpi();
-        // InitializeDisplay();
+        InitializeSpi();
+        InitializeDisplay();
         // 初始化按钮
         InitializeButtons();
 
-        // InitializePowerSaveTimer();
+        // // InitializePowerSaveTimer();
 
         // 设置音频编解码器唤醒回调函数
         audio_codec.OnWakeUp([this](const std::string &command)
@@ -529,10 +523,10 @@ public:
         return &audio_codec; // 返回audio_codec成员变量的地址
     }
 
-    virtual Display *GetDisplay() override
-    {
-        return display_;
-    }
+    // virtual Display *GetDisplay() override
+    // {
+    //     return display_;
+    // }
 
 #if CONFIG_LCD_ST77916_360X360
     // 获取背光对象
