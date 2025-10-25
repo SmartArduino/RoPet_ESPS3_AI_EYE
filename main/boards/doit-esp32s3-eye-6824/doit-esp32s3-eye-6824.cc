@@ -7,7 +7,7 @@
 #include "config.h"
 #include "iot/thing_manager.h"
 #include "led/single_led.h"
-#include "power_save_timer.h"
+// #include "power_save_timer.h"
 
 #include <wifi_station.h>
 #include <esp_log.h>
@@ -23,7 +23,7 @@
 #endif
 #include "assets/lang_config.h"
 #include <ssid_manager.h>
-#include "power_manager.h"
+// #include "power_manager.h"
 
 #define TAG "CompactWifiBoardLCD"
 
@@ -119,54 +119,54 @@ private:
     Button boot_button_;
     LcdDisplay *display_;
     VbAduioCodec audio_codec;
-    PowerSaveTimer *power_save_timer_;
-    PowerManager *power_manager_;
+    // PowerSaveTimer *power_save_timer_;
+    // PowerManager *power_manager_;
 
-    void InitializePowerManager()
-    {
-        power_manager_ = new PowerManager(GPIO_NUM_10);
-        power_manager_->OnChargingStatusChanged([this](bool is_charging)
-                                                {
-            if (is_charging) {
-                power_save_timer_->SetEnabled(false);
-            } else {
-                power_save_timer_->SetEnabled(true);
-            } });
-    }
+    //     void InitializePowerManager()
+    //     {
+    //         power_manager_ = new PowerManager(GPIO_NUM_10);
+    //         power_manager_->OnChargingStatusChanged([this](bool is_charging)
+    //                                                 {
+    //             if (is_charging) {
+    //                 power_save_timer_->SetEnabled(false);
+    //             } else {
+    //                 power_save_timer_->SetEnabled(true);
+    //             } });
+    //     }
 
-    void InitializePowerSaveTimer()
-    {
-        power_save_timer_ = new PowerSaveTimer(-1, 60, 300);
-        power_save_timer_->OnEnterSleepMode([this]()
-                                            {
-                                                ESP_LOGI(TAG, "Enabling sleep mode");
-                                                auto display = GetDisplay();
-                                                display->SetChatMessage("system", "");
-                                                display->SetEmotion("sleepy");
-#if CONFIG_LCD_GC9A01_160X160
-                                                GetBacklight()->RestoreBrightness();
-#endif
-                                                // gpio_set_level(SLEEP_GOIO, 0);
-                                            });
-        power_save_timer_->OnExitSleepMode([this]()
-                                           {
-                                               auto display = GetDisplay();
-                                               display->SetChatMessage("system", "");
-                                               display->SetEmotion("neutral");
-#if CONFIG_LCD_GC9A01_160X160
-                                               GetBacklight()->RestoreBrightness();
-#endif
-                                               // gpio_set_level(SLEEP_GOIO, 1);
-                                           });
-        power_save_timer_->OnShutdownRequest([this]()
-                                             {
-                                                 // pmic_->PowerOff();
-                                                 // gpio_set_level(SLEEP_GOIO, 0);
-                                                 //  ESP_LOGI(TAG,"Not used for a long time. Shut down. Press and hold to turn on!");
-                                                 //  gpio_set_level(SLEEP_GOIO, 0);
-                                             });
-        power_save_timer_->SetEnabled(true);
-    }
+    //     void InitializePowerSaveTimer()
+    //     {
+    //         power_save_timer_ = new PowerSaveTimer(-1, 60, 300);
+    //         power_save_timer_->OnEnterSleepMode([this]()
+    //                                             {
+    //                                                 ESP_LOGI(TAG, "Enabling sleep mode");
+    //                                                 auto display = GetDisplay();
+    //                                                 display->SetChatMessage("system", "");
+    //                                                 display->SetEmotion("sleepy");
+    // #if CONFIG_LCD_GC9A01_160X160
+    //                                                 GetBacklight()->RestoreBrightness();
+    // #endif
+    //                                                 // gpio_set_level(SLEEP_GOIO, 0);
+    //                                             });
+    //         power_save_timer_->OnExitSleepMode([this]()
+    //                                            {
+    //                                                auto display = GetDisplay();
+    //                                                display->SetChatMessage("system", "");
+    //                                                display->SetEmotion("neutral");
+    // #if CONFIG_LCD_GC9A01_160X160
+    //                                                GetBacklight()->RestoreBrightness();
+    // #endif
+    //                                                // gpio_set_level(SLEEP_GOIO, 1);
+    //                                            });
+    //         power_save_timer_->OnShutdownRequest([this]()
+    //                                              {
+    //                                                  // pmic_->PowerOff();
+    //                                                  // gpio_set_level(SLEEP_GOIO, 0);
+    //                                                  //  ESP_LOGI(TAG,"Not used for a long time. Shut down. Press and hold to turn on!");
+    //                                                  //  gpio_set_level(SLEEP_GOIO, 0);
+    //                                              });
+    //         power_save_timer_->SetEnabled(true);
+    //     }
 
     // 初始化按钮
     void InitializeButtons()
@@ -361,8 +361,8 @@ public:
         gpio_set_level(SLEEP_GOIO, 1);
 
         // 初始化省电定时器
-        InitializePowerSaveTimer();
-        InitializePowerManager();
+        // InitializePowerSaveTimer();
+        // InitializePowerManager();
 
         // 设置音频编解码器唤醒回调函数
         audio_codec.OnWakeUp([this](const std::string &command)
@@ -395,21 +395,21 @@ public:
         return display_;
     }
 
-    virtual bool GetBatteryLevel(int &level, bool &charging, bool &discharging) override
-    {
-        static bool last_discharging = false;
-        charging = power_manager_->IsCharging();
-        discharging = power_manager_->IsDischarging();
-        if (discharging != last_discharging)
-        {
-            power_save_timer_->SetEnabled(discharging);
-            last_discharging = discharging;
-        }
-        level = power_manager_->GetBatteryLevel();
-        ESP_LOGI(TAG, "Battery level: %d%%, Charging: %s, Discharging: %s",
-                 level, charging ? "true" : "false", discharging ? "true" : "false");
-        return true;
-    }
+    // virtual bool GetBatteryLevel(int &level, bool &charging, bool &discharging) override
+    // {
+    //     static bool last_discharging = false;
+    //     charging = power_manager_->IsCharging();
+    //     discharging = power_manager_->IsDischarging();
+    //     if (discharging != last_discharging)
+    //     {
+    //         power_save_timer_->SetEnabled(discharging);
+    //         last_discharging = discharging;
+    //     }
+    //     level = power_manager_->GetBatteryLevel();
+    //     ESP_LOGI(TAG, "Battery level: %d%%, Charging: %s, Discharging: %s",
+    //              level, charging ? "true" : "false", discharging ? "true" : "false");
+    //     return true;
+    // }
 
 #if CONFIG_LCD_GC9A01_160X160
     // 获取背光对象
