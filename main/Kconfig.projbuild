@@ -360,6 +360,7 @@ choice DOIT_DISPLAY_LCD_TYPE
            屏幕类型选择
     config LCD_ST7796_240X240
         bool "ST7796,分辨率240*240, 圆屏（可调光)"
+        depends on BOARD_TYPE_DOIT_ESP32S3_EYE_6824_V2
     config LCD_GC9A01_240X240
         bool "GC9A01, 分辨率240*240, 圆屏（不可调光）"
     config LCD_GC9A01_160X160
@@ -421,14 +422,14 @@ config USE_ESP_WAKE_WORD
 
 config USE_AFE_WAKE_WORD
     bool "Enable Wake Word Detection (AFE)"
-    default y
+    default n
     depends on (IDF_TARGET_ESP32S3 || IDF_TARGET_ESP32P4) && SPIRAM
     help
         需要 ESP32 S3 与 PSRAM 支持
 
 config USE_AUDIO_PROCESSOR
     bool "Enable Audio Noise Reduction"
-    default y
+    default n
     depends on (IDF_TARGET_ESP32S3 || IDF_TARGET_ESP32P4) && SPIRAM
     help
         需要 ESP32 S3 与 PSRAM 支持
@@ -473,7 +474,7 @@ endchoice
 
 config SPEAKING_FIRST_MUTE_TIME
     int "Time to mute before speaking"
-    default 0
+    default 60
     help
         讲话之前静音时间
 

@@ -2,8 +2,11 @@
 
 #include <string.h>
 
+#include "FreeRTOSConfig.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "freertos/projdefs.h"
+#include "portmacro.h"
 #include "vb_ota.h"
 
 #include "freertos/FreeRTOS.h"
@@ -38,7 +41,7 @@ static const char *TAG = "vb6824";
 #endif
 
 #define UART_QUEUE_SIZE         16
-#define UART_RX_BUFFER_SIZE     AUDIO_SEND_CHENK_LEN*10
+#define UART_RX_BUFFER_SIZE     AUDIO_SEND_CHENK_LEN*20
 #define UART_TX_BUFFER_SIZE     AUDIO_SEND_CHENK_LEN*10
 
 #define FRAME_MIN_LIN     (7)
@@ -80,6 +83,7 @@ typedef enum
     VB6824_CMD_SEND_VOLUM = 0x0203,
     VB6824_CMD_SEND_OTA = 0x0205,
     VB6824_CMD_SEND_GET_WAKEUP_WORD = 0x0207,
+    VB6824_CMD_SEND_DEEP_SLEEP = 0x0208,
 }vb6824_cmd_t;
 typedef enum
 {
@@ -98,8 +102,10 @@ static SemaphoreHandle_t g_rx_mux = NULL;
 #include "vb_ota.h"
 static jl_ota_event_t s_ota_evt = NULL;
 static esp_timer_handle_t start_ota_timer = NULL;
-static esp_timer_handle_t check_wakeword = NULL;
 #endif
+
+static esp_timer_handle_t check_wakeword = NULL;
+
 static uint8_t s_wait_fresh_wakeup_word = 1;
 static uint8_t s_wait_vb_hello = 1;
 static char s_wakeup_word[32] = {"你好小智"};
@@ -199,7 +205,7 @@ void __frame_send(vb6824_cmd_t cmd, uint8_t *data, uint16_t len){
     int16_t idx = 0;
     uint16_t send_len = len;
 
-    while (idx < len)
+    while (idx < len || len == 0)
     {
         memset(packet, 0, sizeof(packet));
         vb6824_frame_t *frame = (vb6824_frame_t *)packet;
@@ -207,8 +213,10 @@ void __frame_send(vb6824_cmd_t cmd, uint8_t *data, uint16_t len){
         frame->len = SWAP_16(send_len);
         frame->cmd = SWAP_16(cmd);
         
-        memcpy(frame->data, data + idx, (send_len>(len-idx))?(len-idx):send_len);
-        idx += send_len;
+        if(len != 0){
+            memcpy(frame->data, data + idx, (send_len>(len-idx))?(len-idx):send_len);
+            idx += send_len;
+        }
         packet_len = 6 + send_len + 1;
         uint8_t checksum = 0;
         for (size_t i = 0; i < packet_len - 1; i++) {
@@ -217,6 +225,9 @@ void __frame_send(vb6824_cmd_t cmd, uint8_t *data, uint16_t len){
         packet[packet_len - 1] = checksum;
         // ESP_LOGW(TAG, "write_bytes: %d", packet_len);
         uart_write_bytes(UART_NUM, packet, packet_len);
+        if(len == 0){
+            return;
+        } 
     }
 }
 
@@ -272,7 +283,7 @@ void __uart_init(gpio_num_t tx, gpio_num_t rx){
     uart_param_config(UART_NUM, &uart_config);
     uart_set_pin(UART_NUM, tx, rx, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
 
-    xTaskCreate(__uart_task, "__uart_task", CONFIG_VB6824_UART_TASK_STACK_SIZE, NULL, 9, NULL);
+    xTaskCreate(__uart_task, "__uart_task", CONFIG_VB6824_UART_TASK_STACK_SIZE, NULL, configMAX_PRIORITIES-2, NULL);
 }
 
 #ifdef CONFIG_VB6824_SEND_USE_TASK
@@ -527,7 +538,9 @@ void vb6824_audio_set_output_volume(uint8_t volume){
 }
 
 void vb6824_audio_write(uint8_t *data, uint16_t len){
-    xRingbufferSend(g_tx_ringbuffer, (void *)data, len, portMAX_DELAY);
+    if(g_output_enabled){
+        xRingbufferSend(g_tx_ringbuffer, (void *)data, len, portMAX_DELAY);
+    }
 }
 
 uint16_t vb6824_audio_read(uint8_t *data, uint16_t size){
@@ -536,7 +549,7 @@ uint16_t vb6824_audio_read(uint8_t *data, uint16_t size){
     vRingbufferGetInfo(g_rx_ringbuffer, NULL, NULL, NULL, NULL, &items_waiting);
 #if (defined(CONFIG_VB6824_TYPE_OPUS_16K_20MS) || defined(CONFIG_VB6824_TYPE_OPUS_16K_20MS_PCM_16K))
     // if(items_waiting > 0){
-    while (1) {
+    while (g_input_enabled) {
         xSemaphoreTake(g_rx_mux, portMAX_DELAY);
         char *item = (char *)xRingbufferReceive(g_rx_ringbuffer, &item_size, pdMS_TO_TICKS(10));
         if (item != NULL) {
@@ -555,7 +568,7 @@ uint16_t vb6824_audio_read(uint8_t *data, uint16_t size){
     // }
 #else
     // if(items_waiting > size){
-    while (1) {
+    while (g_input_enabled) {
         xSemaphoreTake(g_rx_mux, portMAX_DELAY);
         char *item = (uint8_t *)xRingbufferReceiveUpTo(g_rx_ringbuffer, &item_size, pdMS_TO_TICKS(10), size);
         if(item_size > 0){
@@ -622,16 +635,18 @@ int vb6824_ota(const char* code, jl_ota_event_t evt_cb){
 }
 
 
+#endif
 void __check_vb_timer_cb(void *arg){
     static uint8_t times = 0;
     if (s_wait_fresh_wakeup_word)
     {
         if (times>=20)
         {
-
+#if defined(CONFIG_VB6824_OTA_SUPPORT) && CONFIG_VB6824_OTA_SUPPORT == 1
             if(s_wait_vb_hello && g_voice_event_cb){
                 g_voice_event_cb(VB6824_EVT_OTA_ENTER, 1, g_voice_event_cb_arg);
             }
+#endif
             return;
         }
         times++;
@@ -639,9 +654,7 @@ void __check_vb_timer_cb(void *arg){
         __frame_send(VB6824_CMD_SEND_GET_WAKEUP_WORD, &test, 1);
         esp_timer_start_once(check_wakeword, 200*1000);
     }
-    
 }
-#endif
 
 bool vb6824_is_support_ota(){
 #if defined(CONFIG_VB6824_OTA_SUPPORT) && CONFIG_VB6824_OTA_SUPPORT == 1
@@ -653,6 +666,11 @@ bool vb6824_is_support_ota(){
 #else
     return false;
 #endif
+}
+
+void vb6824_deep_sleep_start(void){
+    ESP_LOGW(TAG, "vb6824_deep_sleep_start");
+    __frame_send(VB6824_CMD_SEND_DEEP_SLEEP, NULL, 0);
 }
 
 void vb6824_init(gpio_num_t tx, gpio_num_t rx){
@@ -678,7 +696,6 @@ void vb6824_init(gpio_num_t tx, gpio_num_t rx){
     uint8_t test = 1;
     __frame_send(VB6824_CMD_SEND_GET_WAKEUP_WORD, &test, 1);
     
-#if defined(CONFIG_VB6824_OTA_SUPPORT) && CONFIG_VB6824_OTA_SUPPORT == 1
     esp_timer_create_args_t check_timer_args = {
         .callback = __check_vb_timer_cb,
         .dispatch_method = ESP_TIMER_TASK,
@@ -691,9 +708,9 @@ void vb6824_init(gpio_num_t tx, gpio_num_t rx){
     }else{
         ESP_LOGE(TAG, "send_timer is null");
     }
-#endif
+
 #ifdef CONFIG_VB6824_SEND_USE_TASK
-    xTaskCreate(__send_task, "__send_task", CONFIG_VB6824_SEND_TASK_STACK_SIZE, NULL, 9, NULL);
+    xTaskCreate(__send_task, "__send_task", CONFIG_VB6824_SEND_TASK_STACK_SIZE, NULL, configMAX_PRIORITIES-2, NULL);
 #else
     esp_timer_handle_t send_timer = NULL;
     esp_timer_create_args_t timer_args = {

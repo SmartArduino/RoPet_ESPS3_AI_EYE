@@ -12,7 +12,7 @@ menu "VB6824"
 	endchoice
     config VB6824_OTA_SUPPORT
         bool "6824支持升级"
-        default n
+        default y
         select HTTPD_WS_SUPPORT
     
     config VB6824_UART_PORT
