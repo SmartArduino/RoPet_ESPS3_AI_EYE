@@ -304,7 +304,7 @@ choice DISPLAY_OLED_TYPE
 endchoice
 
 choice DISPLAY_LCD_TYPE
-    depends on BOARD_TYPE_BREAD_COMPACT_WIFI_LCD || BOARD_TYPE_BREAD_COMPACT_ESP32_LCD || BOARD_TYPE_ESP32_CGC || BOARD_TYPE_ESP32P4_NANO || BOARD_TYPE_ESP32P4_WIFI6_Touch_LCD_XC || BOARD_TYPE_DOIT_ESP32S3_EYE_6824 || BOARD_TYPE_DOIT_ESP32S3_EYE_8311
+    depends on BOARD_TYPE_BREAD_COMPACT_WIFI_LCD || BOARD_TYPE_BREAD_COMPACT_ESP32_LCD || BOARD_TYPE_ESP32_CGC || BOARD_TYPE_ESP32P4_NANO || BOARD_TYPE_ESP32P4_WIFI6_Touch_LCD_XC
     prompt "LCD Type"
     default LCD_GC9A01_240X240
     help
@@ -337,10 +337,6 @@ choice DISPLAY_LCD_TYPE
         bool "ILI9341, 分辨率240*320"
     config LCD_ILI9341_240X320_NO_IPS
         bool "ILI9341, 分辨率240*320, 非IPS"
-    config LCD_GC9A01_240X240
-        bool "GC9A01, 分辨率240*240, 圆屏"
-    config LCD_GC9A01_160X160
-        bool "GC9A01, 分辨率160*160, 0.71寸"
     config LCD_TYPE_800_1280_10_1_INCH
         bool "Waveshare 101M-8001280-IPS-CT-K Display"
     config LCD_TYPE_800_1280_10_1_INCH_A
@@ -364,6 +360,19 @@ choice DISPLAY_ESP32S3_KORVO2_V3
     config LCD_ILI9341
         bool "ILI9341, 分辨率240*320"
 endchoice
+
+choice DISPLAY_ESP32S3_DOIT_EYE_LCD_TYPE
+    depends on  BOARD_TYPE_DOIT_ESP32S3_EYE_6824 || BOARD_TYPE_DOIT_ESP32S3_EYE_8311
+    prompt "DOIT LCD Type"
+    default LCD_GC9A01_240X240
+    help
+        屏幕类型选择
+    config LCD_GC9A01_240X240
+        bool "GC9A01, 分辨率240*240, 圆屏"
+    config LCD_GC9A01_160X160
+        bool "GC9A01, 分辨率160*160, 0.71寸"
+endchoice
+
 
 choice
     prompt "Net Configuration Mode"
@@ -408,14 +417,14 @@ config USE_ESP_WAKE_WORD
 
 config USE_AFE_WAKE_WORD
     bool "Enable Wake Word Detection (AFE)"
-    default y
+    default n
     depends on (IDF_TARGET_ESP32S3 || IDF_TARGET_ESP32P4) && SPIRAM
     help
         需要 ESP32 S3 与 PSRAM 支持
 
 config USE_AUDIO_PROCESSOR
     bool "Enable Audio Noise Reduction"
-    default y
+    default n
     depends on (IDF_TARGET_ESP32S3 || IDF_TARGET_ESP32P4) && SPIRAM
     help
         需要 ESP32 S3 与 PSRAM 支持
