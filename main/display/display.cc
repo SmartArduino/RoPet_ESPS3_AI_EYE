@@ -14,11 +14,13 @@
 
 #define TAG "Display"
 
-Display::Display() {
+Display::Display()
+{
     // Notification timer
     esp_timer_create_args_t notification_timer_args = {
-        .callback = [](void *arg) {
-            Display *display = static_cast<Display*>(arg);
+        .callback = [](void *arg)
+        {
+            Display *display = static_cast<Display *>(arg);
             DisplayLockGuard lock(display);
             lv_obj_add_flag(display->notification_label_, LV_OBJ_FLAG_HIDDEN);
             lv_obj_clear_flag(display->status_label_, LV_OBJ_FLAG_HIDDEN);
@@ -32,20 +34,26 @@ Display::Display() {
 
     // Create a power management lock
     auto ret = esp_pm_lock_create(ESP_PM_APB_FREQ_MAX, 0, "display_update", &pm_lock_);
-    if (ret == ESP_ERR_NOT_SUPPORTED) {
+    if (ret == ESP_ERR_NOT_SUPPORTED)
+    {
         ESP_LOGI(TAG, "Power management not supported");
-    } else {
+    }
+    else
+    {
         ESP_ERROR_CHECK(ret);
     }
 }
 
-Display::~Display() {
-    if (notification_timer_ != nullptr) {
+Display::~Display()
+{
+    if (notification_timer_ != nullptr)
+    {
         esp_timer_stop(notification_timer_);
         esp_timer_delete(notification_timer_);
     }
 
-    if (network_label_ != nullptr) {
+    if (network_label_ != nullptr)
+    {
         lv_obj_del(network_label_);
         lv_obj_del(notification_label_);
         lv_obj_del(status_label_);
@@ -53,17 +61,21 @@ Display::~Display() {
         lv_obj_del(battery_label_);
         lv_obj_del(emotion_label_);
     }
-    if( low_battery_popup_ != nullptr ) {
+    if (low_battery_popup_ != nullptr)
+    {
         lv_obj_del(low_battery_popup_);
     }
-    if (pm_lock_ != nullptr) {
+    if (pm_lock_ != nullptr)
+    {
         esp_pm_lock_delete(pm_lock_);
     }
 }
 
-void Display::SetStatus(const char* status) {
+void Display::SetStatus(const char *status)
+{
     DisplayLockGuard lock(this);
-    if (status_label_ == nullptr) {
+    if (status_label_ == nullptr)
+    {
         return;
     }
     lv_label_set_text(status_label_, status);
@@ -71,13 +83,16 @@ void Display::SetStatus(const char* status) {
     lv_obj_add_flag(notification_label_, LV_OBJ_FLAG_HIDDEN);
 }
 
-void Display::ShowNotification(const std::string &notification, int duration_ms) {
+void Display::ShowNotification(const std::string &notification, int duration_ms)
+{
     ShowNotification(notification.c_str(), duration_ms);
 }
 
-void Display::ShowNotification(const char* notification, int duration_ms) {
+void Display::ShowNotification(const char *notification, int duration_ms)
+{
     DisplayLockGuard lock(this);
-    if (notification_label_ == nullptr) {
+    if (notification_label_ == nullptr)
+    {
         return;
     }
     lv_label_set_text(notification_label_, notification);
@@ -88,21 +103,26 @@ void Display::ShowNotification(const char* notification, int duration_ms) {
     ESP_ERROR_CHECK(esp_timer_start_once(notification_timer_, duration_ms * 1000));
 }
 
-void Display::UpdateStatusBar(bool update_all) {
-    auto& board = Board::GetInstance();
+void Display::UpdateStatusBar(bool update_all)
+{
+    auto &board = Board::GetInstance();
     auto codec = board.GetAudioCodec();
 
     {
         DisplayLockGuard lock(this);
-        if (mute_label_ == nullptr) {
+        if (mute_label_ == nullptr)
+        {
             return;
         }
 
         // 如果静音状态改变，则更新图标
-        if (codec->output_volume() == 0 && !muted_) {
+        if (codec->output_volume() == 0 && !muted_)
+        {
             muted_ = true;
             lv_label_set_text(mute_label_, FONT_AWESOME_VOLUME_MUTE);
-        } else if (codec->output_volume() > 0 && muted_) {
+        }
+        else if (codec->output_volume() > 0 && muted_)
+        {
             muted_ = false;
             lv_label_set_text(mute_label_, "");
         }
@@ -112,37 +132,48 @@ void Display::UpdateStatusBar(bool update_all) {
     // 更新电池图标
     int battery_level;
     bool charging, discharging;
-    const char* icon = nullptr;
-    if (board.GetBatteryLevel(battery_level, charging, discharging)) {
-        if (charging) {
+    const char *icon = nullptr;
+    if (board.GetBatteryLevel(battery_level, charging, discharging))
+    {
+        if (charging)
+        {
             icon = FONT_AWESOME_BATTERY_CHARGING;
-        } else {
-            const char* levels[] = {
+        }
+        else
+        {
+            const char *levels[] = {
                 FONT_AWESOME_BATTERY_EMPTY, // 0-19%
-                FONT_AWESOME_BATTERY_1,    // 20-39%
-                FONT_AWESOME_BATTERY_2,    // 40-59%
-                FONT_AWESOME_BATTERY_3,    // 60-79%
-                FONT_AWESOME_BATTERY_FULL, // 80-99%
-                FONT_AWESOME_BATTERY_FULL, // 100%
+                FONT_AWESOME_BATTERY_1,     // 20-39%
+                FONT_AWESOME_BATTERY_2,     // 40-59%
+                FONT_AWESOME_BATTERY_3,     // 60-79%
+                FONT_AWESOME_BATTERY_FULL,  // 80-99%
+                FONT_AWESOME_BATTERY_FULL,  // 100%
             };
             icon = levels[battery_level / 20];
         }
         DisplayLockGuard lock(this);
-        if (battery_label_ != nullptr && battery_icon_ != icon) {
+        if (battery_label_ != nullptr && battery_icon_ != icon)
+        {
             battery_icon_ = icon;
             lv_label_set_text(battery_label_, battery_icon_);
         }
 
-        if (low_battery_popup_ != nullptr) {
-            if (strcmp(icon, FONT_AWESOME_BATTERY_EMPTY) == 0 && discharging) {
-                if (lv_obj_has_flag(low_battery_popup_, LV_OBJ_FLAG_HIDDEN)) { // 如果低电量提示框隐藏，则显示
+        if (low_battery_popup_ != nullptr)
+        {
+            if (strcmp(icon, FONT_AWESOME_BATTERY_EMPTY) == 0 && discharging)
+            {
+                if (lv_obj_has_flag(low_battery_popup_, LV_OBJ_FLAG_HIDDEN))
+                { // 如果低电量提示框隐藏，则显示
                     lv_obj_clear_flag(low_battery_popup_, LV_OBJ_FLAG_HIDDEN);
-                    auto& app = Application::GetInstance();
+                    auto &app = Application::GetInstance();
                     app.PlaySound(Lang::Sounds::P3_LOW_BATTERY);
                 }
-            } else {
+            }
+            else
+            {
                 // Hide the low battery popup when the battery is not empty
-                if (!lv_obj_has_flag(low_battery_popup_, LV_OBJ_FLAG_HIDDEN)) { // 如果低电量提示框显示，则隐藏
+                if (!lv_obj_has_flag(low_battery_popup_, LV_OBJ_FLAG_HIDDEN))
+                { // 如果低电量提示框显示，则隐藏
                     lv_obj_add_flag(low_battery_popup_, LV_OBJ_FLAG_HIDDEN);
                 }
             }
@@ -151,7 +182,8 @@ void Display::UpdateStatusBar(bool update_all) {
 
     // 每 10 秒更新一次网络图标
     static int seconds_counter = 0;
-    if (update_all || seconds_counter++ % 10 == 0) {
+    if (update_all || seconds_counter++ % 10 == 0)
+    {
         // 升级固件时，不读取 4G 网络状态，避免占用 UART 资源
         auto device_state = Application::GetInstance().GetDeviceState();
         static const std::vector<DeviceState> allowed_states = {
@@ -161,9 +193,11 @@ void Display::UpdateStatusBar(bool update_all) {
             kDeviceStateListening,
             kDeviceStateActivating,
         };
-        if (std::find(allowed_states.begin(), allowed_states.end(), device_state) != allowed_states.end()) {
+        if (std::find(allowed_states.begin(), allowed_states.end(), device_state) != allowed_states.end())
+        {
             icon = board.GetNetworkStateIcon();
-            if (network_label_ != nullptr && icon != nullptr && network_icon_ != icon) {
+            if (network_label_ != nullptr && icon != nullptr && network_icon_ != icon)
+            {
                 DisplayLockGuard lock(this);
                 network_icon_ = icon;
                 lv_label_set_text(network_label_, network_icon_);
@@ -174,11 +208,12 @@ void Display::UpdateStatusBar(bool update_all) {
     esp_pm_lock_release(pm_lock_);
 }
 
-
-void Display::SetEmotion(const char* emotion) {
-    struct Emotion {
-        const char* icon;
-        const char* text;
+void Display::SetEmotion(const char *emotion)
+{
+    struct Emotion
+    {
+        const char *icon;
+        const char *text;
     };
 
     static const std::vector<Emotion> emotions = {
@@ -202,55 +237,66 @@ void Display::SetEmotion(const char* emotion) {
         {FONT_AWESOME_EMOJI_CONFIDENT, "confident"},
         {FONT_AWESOME_EMOJI_SLEEPY, "sleepy"},
         {FONT_AWESOME_EMOJI_SILLY, "silly"},
-        {FONT_AWESOME_EMOJI_CONFUSED, "confused"}
-    };
-    
+        {FONT_AWESOME_EMOJI_CONFUSED, "confused"}};
+
     // 查找匹配的表情
     std::string_view emotion_view(emotion);
     auto it = std::find_if(emotions.begin(), emotions.end(),
-        [&emotion_view](const Emotion& e) { return e.text == emotion_view; });
-    
+                           [&emotion_view](const Emotion &e)
+                           { return e.text == emotion_view; });
+
     DisplayLockGuard lock(this);
-    if (emotion_label_ == nullptr) {
+    if (emotion_label_ == nullptr)
+    {
         return;
     }
 
     // 如果找到匹配的表情就显示对应图标，否则显示默认的neutral表情
-    if (it != emotions.end()) {
+    if (it != emotions.end())
+    {
         lv_label_set_text(emotion_label_, it->icon);
-    } else {
+    }
+    else
+    {
         lv_label_set_text(emotion_label_, FONT_AWESOME_EMOJI_NEUTRAL);
     }
 }
 
-void Display::SetIcon(const char* icon) {
+void Display::SetIcon(const char *icon)
+{
     DisplayLockGuard lock(this);
-    if (emotion_label_ == nullptr) {
+    if (emotion_label_ == nullptr)
+    {
         return;
     }
     lv_label_set_text(emotion_label_, icon);
 }
 
-void Display::SetPreviewImage(const lv_img_dsc_t* image) {
+void Display::SetPreviewImage(const lv_img_dsc_t *image)
+{
     // Do nothing
 }
 
-void Display::SetChatMessage(const char* role, const char* content) {
+void Display::SetChatMessage(const char *role, const char *content)
+{
     DisplayLockGuard lock(this);
-    if (chat_message_label_ == nullptr) {
+    if (chat_message_label_ == nullptr)
+    {
         return;
     }
     lv_label_set_text(chat_message_label_, content);
 }
 
-void Display::SetTheme(const std::string& theme_name) {
+void Display::SetTheme(const std::string &theme_name)
+{
     current_theme_name_ = theme_name;
     Settings settings("display", true);
     settings.SetString("theme", theme_name);
 }
 
-#if CONFIG_USE_EYE_STYLE_ES8311 || CONFIG_USE_EYE_STYLE_VB6824  //如果开启魔眼显示
-    // 设置眼睛的位置和颜色
-    void Display::SetEye(int x_start, int y_start, int x_end, int y_end, const void *color_data) {
-    }
+#if CONFIG_USE_EYE_STYLE_ES8311 || CONFIG_USE_EYE_STYLE_VB6824 // 如果开启魔眼显示
+// 设置眼睛的位置和颜色
+void Display::SetEye(int x_start, int y_start, int x_end, int y_end, const void *color_data)
+{
+}
 #endif

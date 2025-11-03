@@ -24,7 +24,7 @@
 #include "wake_word.h"
 #include "audio_debugger.h"
 
-#if CONFIG_LCD_GC9A01_240X240 && CONFIG_USE_EYE_STYLE_VB6824
+#if (CONFIG_LCD_GC9A01_240X240 || CONFIG_LCD_ST7796_240X240) && CONFIG_USE_EYE_STYLE_VB6824
 #include "eye_data/240_240/blood.h"
 #include "eye_data/240_240/cospa.h"
 #include "eye_data/240_240/default.h"

@@ -4,6 +4,7 @@
 #include "display/lcd_display.h"
 #include "system_reset.h"
 #include "application.h"
+#include "iot/thing_manager.h"
 #include "button.h"
 #include "config.h"
 #include "led/single_led.h"
@@ -18,6 +19,9 @@
 #include <driver/spi_common.h>
 
 #include "lcd_cmd.h"
+
+#include "m_touch_button.h"
+#include "motor.h"
 
 #define TAG "CompactWifiBoardLCD"
 
@@ -39,40 +43,48 @@ private:
     Button boot_button_;
     LcdDisplay *display_;
     VbAduioCodec audio_codec;
-    PowerSaveTimer *power_save_timer_;
+    // PowerSaveTimer *power_save_timer_;
 
-    void InitializePowerSaveTimer()
+    //     void InitializePowerSaveTimer()
+    //     {
+    //         power_save_timer_ = new PowerSaveTimer(-1, 60, 300);
+    //         power_save_timer_->OnEnterSleepMode([this]()
+    //                                             {
+    //                                                 ESP_LOGI(TAG, "Enabling sleep mode");
+    //                                                 auto display = GetDisplay();
+    //                                                 display->SetChatMessage("system", "");
+    //                                                 display->SetEmotion("sleepy");
+    // #if CONFIG_LCD_GC9A01_160X160
+    //                                                 GetBacklight()->RestoreBrightness();
+    // #endif
+    //                                                 // gpio_set_level(SLEEP_GOIO, 0);
+    //                                             });
+    //         power_save_timer_->OnExitSleepMode([this]()
+    //                                            {
+    //                                                auto display = GetDisplay();
+    //                                                display->SetChatMessage("system", "");
+    //                                                display->SetEmotion("neutral");
+    // #if CONFIG_LCD_GC9A01_160X160
+    //                                                GetBacklight()->RestoreBrightness();
+    // #endif
+    //                                                // gpio_set_level(SLEEP_GOIO, 1);
+    //                                            });
+    //         power_save_timer_->OnShutdownRequest([this]()
+    //                                              {
+    //                                                  // pmic_->PowerOff();
+    //                                                  // gpio_set_level(SLEEP_GOIO, 0);
+    //                                                  //  ESP_LOGI(TAG,"Not used for a long time. Shut down. Press and hold to turn on!");
+    //                                                  //  gpio_set_level(SLEEP_GOIO, 0);
+    //                                              });
+    //         power_save_timer_->SetEnabled(true);
+    //     }
+
+    void InitializeIot()
     {
-        power_save_timer_ = new PowerSaveTimer(-1, 60, 300);
-        power_save_timer_->OnEnterSleepMode([this]()
-                                            {
-                                                ESP_LOGI(TAG, "Enabling sleep mode");
-                                                auto display = GetDisplay();
-                                                display->SetChatMessage("system", "");
-                                                display->SetEmotion("sleepy");
-#if CONFIG_LCD_GC9A01_160X160
-                                                GetBacklight()->RestoreBrightness();
-#endif
-                                                // gpio_set_level(SLEEP_GOIO, 0);
-                                            });
-        power_save_timer_->OnExitSleepMode([this]()
-                                           {
-                                               auto display = GetDisplay();
-                                               display->SetChatMessage("system", "");
-                                               display->SetEmotion("neutral");
-#if CONFIG_LCD_GC9A01_160X160
-                                               GetBacklight()->RestoreBrightness();
-#endif
-                                               // gpio_set_level(SLEEP_GOIO, 1);
-                                           });
-        power_save_timer_->OnShutdownRequest([this]()
-                                             {
-                                                 // pmic_->PowerOff();
-                                                 // gpio_set_level(SLEEP_GOIO, 0);
-                                                 //  ESP_LOGI(TAG,"Not used for a long time. Shut down. Press and hold to turn on!");
-                                                 //  gpio_set_level(SLEEP_GOIO, 0);
-                                             });
-        power_save_timer_->SetEnabled(true);
+        auto &thing_manager = iot::ThingManager::GetInstance();
+        thing_manager.AddThing(iot::CreateThing("Speaker"));
+        thing_manager.AddThing(iot::CreateThing("Screen"));
+        // thing_manager.AddThing(iot::CreateThing("Lamp"));
     }
 
     // 初始化按钮
@@ -185,7 +197,7 @@ private:
         io_config.cs_gpio_num = SPI_LCD_GPIO_CS;
         io_config.dc_gpio_num = SPI_LCD_GPIO_DC;
         io_config.spi_mode = 0;
-        io_config.pclk_hz = 40 * 1000 * 1000;
+        io_config.pclk_hz = 20 * 1000 * 1000;
         io_config.trans_queue_depth = 10;
         io_config.lcd_cmd_bits = 8;
         io_config.lcd_param_bits = 8;
@@ -486,6 +498,11 @@ public:
         InitializeDisplay();
         // 初始化按钮
         InitializeButtons();
+        // 初始化物联网
+        InitializeIot();
+
+        motor_init(TEMP_EN);
+        touch_button_init();
 
         // // InitializePowerSaveTimer();
 

@@ -403,7 +403,7 @@ config USE_EYE_STYLE_ES8311
 config USE_EYE_STYLE_VB6824
     bool "使用魔眼界面风格(VB6824)"
     default n
-    depends on BOARD_TYPE_DOIT_ESP32S3_EYE_6824
+    depends on BOARD_TYPE_DOIT_ESP32S3_EYE_6824 || BOARD_TYPE_DOIT_ESP32S3_EYE_6824_V2
     help
         使用魔眼界面风格(VB6824)
 

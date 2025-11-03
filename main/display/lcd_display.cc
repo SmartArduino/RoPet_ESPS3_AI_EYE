@@ -15,7 +15,8 @@
 #if CONFIG_USE_EYE_STYLE_ES8311 || CONFIG_USE_EYE_STYLE_VB6824
 #include "application.h"
 #endif
-
+static esp_lcd_panel_io_handle_t panel_io_1 = nullptr;
+static esp_lcd_panel_handle_t panel_1 = nullptr;
 #define TAG "LcdDisplay"
 
 // Color definitions for dark theme
@@ -94,6 +95,9 @@ LcdDisplay::LcdDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handle_
 {
     width_ = width;
     height_ = height;
+
+    panel_io_1 = panel_io;
+    panel_1 = panel;
 
     // Load theme from settings
     Settings settings("display", false);
@@ -1426,3 +1430,63 @@ void LcdDisplay::SetTheme(const std::string &theme_name)
     Display::SetTheme(theme_name);
 }
 #endif
+
+// void Reinitialize()
+// {
+
+//     ESP_LOGW(TAG, "Reinitializing LCD panel...");
+
+//     if (!panel_1)
+//     {
+//         ESP_LOGE(TAG, "Panel handle is null, skip reinit.");
+//         return;
+//     }
+
+//     // 1️⃣ 重新初始化主屏
+//     esp_err_t ret = esp_lcd_panel_reset(panel_1);
+//     if (ret != ESP_OK)
+//     {
+//         ESP_LOGE(TAG, "Failed to reset main panel: %s", esp_err_to_name(ret));
+//     }
+
+//     ret = esp_lcd_panel_init(panel_1);
+//     if (ret != ESP_OK)
+//     {
+//         ESP_LOGE(TAG, "Failed to init main panel: %s", esp_err_to_name(ret));
+//     }
+
+//     ret = esp_lcd_panel_disp_on_off(panel_1, true);
+//     if (ret != ESP_OK)
+//     {
+//         ESP_LOGE(TAG, "Failed to turn on main panel: %s", esp_err_to_name(ret));
+//     }
+
+// #if CONFIG_BOARD_TYPE_DOIT_ESP32S3_EYE_8311 || CONFIG_BOARD_TYPE_DOIT_ESP32S3_EYE_6824_DIFF
+//     // 2️⃣ 如果是双屏（如 8311/6824），同步重新初始化第二块屏幕
+//     if (panel_2)
+//     {
+//         ESP_LOGW(TAG, "Reinitializing secondary panel...");
+//         ret = esp_lcd_panel_reset(panel_2);
+//         if (ret != ESP_OK)
+//         {
+//             ESP_LOGE(TAG, "Failed to reset secondary panel: %s", esp_err_to_name(ret));
+//         }
+
+//         ret = esp_lcd_panel_init(panel_2);
+//         if (ret != ESP_OK)
+//         {
+//             ESP_LOGE(TAG, "Failed to init secondary panel: %s", esp_err_to_name(ret));
+//         }
+
+//         ret = esp_lcd_panel_disp_on_off(panel_2, true);
+//         if (ret != ESP_OK)
+//         {
+//             ESP_LOGE(TAG, "Failed to turn on secondary panel: %s", esp_err_to_name(ret));
+//         }
+//     }
+// #endif
+
+//     // 3️⃣ LVGL 刷新一次防止残影
+
+//     ESP_LOGI(TAG, "LCD reinitialization complete.");
+// }

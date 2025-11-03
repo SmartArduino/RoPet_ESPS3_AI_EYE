@@ -22,6 +22,8 @@
 #define OUT_Z_H_REG 0x2D
 /*=============================================================*/
 
+#define TEMP_EN GPIO_NUM_39 // 舵机
+
 #if CONFIG_LCD_ST77916_360X360
 /*================================QSPI========================*/
 // 分辨率
@@ -74,9 +76,9 @@
 #define SPI_DISPLAY_BACKLIGHT_OUTPUT_INVERT false
 
 // 镜像和轴交换：通常不需要镜像或轴交换，除非你的硬件设计需要特定的显示方向。
-#if CONFIG_LCD_ST7796_240X240 || CONFIG_LCD_GC9A01_240X240
+#if CONFIG_LCD_GC9A01_240X240
 #define DISPLAY_MIRROR_X true
-#elif CONFIG_LCD_GC9A01_160X160
+#elif CONFIG_LCD_GC9A01_160X160 || CONFIG_LCD_ST7796_240X240
 #define DISPLAY_MIRROR_X false
 #endif
 
