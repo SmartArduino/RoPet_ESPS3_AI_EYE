@@ -15,7 +15,7 @@ list(APPEND assets assets/update.html)
 list(APPEND srcs https.c)
 endif()
 
-idf_component_register(SRCS "https.c" "${srcs}"
+idf_component_register(SRCS "vb6824.c" "https.c" "${srcs}"
                             INCLUDE_DIRS "${incs}"
                             EMBED_TXTFILES "${assets}"
                             REQUIRES driver esp_wifi esp_http_client esp_http_server json esp_timer)

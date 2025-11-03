@@ -540,10 +540,10 @@ public:
         return &audio_codec; // 返回audio_codec成员变量的地址
     }
 
-    // virtual Display *GetDisplay() override
-    // {
-    //     return display_;
-    // }
+    virtual Display *GetDisplay() override
+    {
+        return display_;
+    }
 
 #if CONFIG_LCD_ST77916_360X360
     // 获取背光对象
