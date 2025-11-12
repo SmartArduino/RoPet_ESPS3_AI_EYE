@@ -20,7 +20,6 @@ public:
     virtual Mqtt *CreateMqtt() override;
     virtual Udp *CreateUdp() override;
     virtual const char *GetNetworkStateIcon() override;
-    virtual const char *GetBleStateIcon() override;
     virtual void SetPowerSaveMode(bool enabled) override;
     virtual AudioCodec *GetAudioCodec() override { return nullptr; }
     virtual std::string GetDeviceStatusJson() override;

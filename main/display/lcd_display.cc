@@ -1039,7 +1039,7 @@ void LcdDisplay::SetEmotion(const char *emotion)
     ESP_LOGI(TAG, "%s", emotion);
 
     static const EmotionConfig emotionConfigs[] = {
-        {"neutral", 505, 805, true, true},      // 默认表情，眼球居中，正常眨眼"😶" ok
+        {"neutral", 505, 805, true, false},     // 默认表情，眼球居中，正常眨眼"😶" ok
         {"happy", 520, 1005, true, true},       // 眼睛稍微向下看，显得开心"🙂" ok
         {"laughing", 500, 1015, true, true},    // 眼睛向下看，显得大笑"😆"    ok
         {"funny", 520, 25, true, true},         // 眼睛向下看，显得搞笑"😂"

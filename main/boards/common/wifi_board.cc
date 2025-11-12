@@ -271,10 +271,6 @@ const char *WifiBoard::GetNetworkStateIcon()
     }
 }
 
-const char *WifiBoard::GetBleStateIcon()
-{
-    return ble_active_ ? FONT_AWESOME_BLUETOOTH : "";
-}
 
 std::string WifiBoard::GetBoardJson()
 {
