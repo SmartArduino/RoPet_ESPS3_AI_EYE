@@ -4,7 +4,6 @@
 #include "display/lcd_display.h"
 #include "system_reset.h"
 #include "application.h"
-#include "iot/thing_manager.h"
 #include "button.h"
 #include "config.h"
 #include "led/single_led.h"
@@ -78,14 +77,6 @@ private:
     //                                              });
     //         power_save_timer_->SetEnabled(true);
     //     }
-
-    void InitializeIot()
-    {
-        auto &thing_manager = iot::ThingManager::GetInstance();
-        thing_manager.AddThing(iot::CreateThing("Speaker"));
-        thing_manager.AddThing(iot::CreateThing("Screen"));
-        // thing_manager.AddThing(iot::CreateThing("Lamp"));
-    }
 
     // 初始化按钮
     void InitializeButtons()
@@ -285,39 +276,6 @@ private:
 
     //     ESP_LOGI(TAG, "扫描完成，共发现 %d 个设备", found);
     // }
-    // inline uint8_t SL_SC7A20H_I2c_Spi_Write(uint8_t sl_spi_iic,
-    //                                         uint8_t reg,
-    //                                         uint8_t dat)
-    // {
-    //     if (sl_spi_iic != 1)
-    //         return 0; // 只跑 I2C
-    //     uint8_t buf[2] = {reg, dat};
-    //     return i2c_master_transmit(sc7a20h_dev_handle, buf, sizeof(buf), -1) == ESP_OK ? 1 : 0;
-    // }
-
-    // void AccTaskEntry(void *)
-    // {
-    //     int16_t x, y, z;
-    //     uint8_t raw[6];
-    //     for (;;)
-    //     {
-    //         /* 一次读 6 字节，自动递增 */
-    //         if (i2c_master_transmit_receive(sc7a20h_dev_handle,
-    //                                         (uint8_t[]){0x28 | 0x80}, 1,
-    //                                         raw, 6, pdMS_TO_TICKS(100)) == ESP_OK)
-    //         {
-    //             x = (int16_t)((raw[1] << 8) | raw[0]) >> 4;
-    //             y = (int16_t)((raw[3] << 8) | raw[2]) >> 4;
-    //             z = (int16_t)((raw[5] << 8) | raw[4]) >> 4;
-    //             ESP_LOGI("ACC", "X:%6d Y:%6d Z:%6d", x, y, z);
-    //         }
-    //         else
-    //         {
-    //             ESP_LOGE("ACC", "read fail");
-    //         }
-    //         vTaskDelay(pdMS_TO_TICKS(100)); // 100 Hz 采样
-    //     }
-    // }
 
     // esp_err_t sc7a20h_write_byte(uint8_t reg, uint8_t value)
     // {
@@ -498,11 +456,9 @@ public:
         InitializeDisplay();
         // 初始化按钮
         InitializeButtons();
-        // 初始化物联网
-        InitializeIot();
 
-        motor_init(TEMP_EN);
-        touch_button_init();
+        // motor_init(TEMP_EN);
+        // touch_button_init();
 
         // // InitializePowerSaveTimer();
 

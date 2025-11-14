@@ -2,6 +2,7 @@
 #include "touch_button.h"
 #include <esp_log.h>
 #include "motor.h"
+#include "touch_element/touch_button.h"
 
 #include "application.h"
 
