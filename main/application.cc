@@ -89,7 +89,7 @@ Application::Application()
 
 #if CONFIG_USE_EYE_STYLE_ES8311 || CONFIG_USE_EYE_STYLE_VB6824 // 如果开启魔眼显示
     is_blink = true;
-    is_track = false;
+    is_track = true;
     eyeNewX = 512;
     eyeNewY = 512;
     eye_style_num = 0;
@@ -1818,7 +1818,7 @@ void Application::split(
 void Application::eye_style(uint8_t eye_style)
 {
     // is_track = rand() % 2;
-    is_track = false;
+    is_track = true;
     switch (eye_style)
     {
     case 1:
