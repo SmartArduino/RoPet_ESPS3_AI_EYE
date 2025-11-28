@@ -102,16 +102,17 @@ private:
         boot_button_.OnDoubleClick([this]()
                                    {
 
-    if (esp_timer_get_time() > 20 * 1000 * 1000){
+    // if (esp_timer_get_time() > 20 * 1000 * 1000){
                 ESP_LOGI(TAG, "Long press, do not enter OTA mode %ld", (uint32_t)esp_timer_get_time());
 #if CONFIG_USE_PSD_MULTIPLE
         
             doit_file_psd_multi_process(true);
 #endif
                 return;
-        }else{
-audio_codec.OtaStart(0);
-        } });
+//         }else{
+// audio_codec.OtaStart(0);
+//         } 
+    });
 #endif
 
         boot_button_.OnPressRepeaDone([this](uint16_t count)

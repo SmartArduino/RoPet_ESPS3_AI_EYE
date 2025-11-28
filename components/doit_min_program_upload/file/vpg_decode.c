@@ -145,6 +145,7 @@ static void vpg_show_task(void *pvParameters)
 
         if (xQueueReceive(jpg_decode_queue, &vpg_frame, pdMS_TO_TICKS(10)) == pdTRUE)
         {
+            // ESP_LOGI(TAG,"显示第%d索",vpg_frame.buf_idx);
             uint8_t idx = vpg_frame.buf_idx;
 
             lvgl_port_lock(-1);
@@ -156,11 +157,12 @@ static void vpg_show_task(void *pvParameters)
             if (last_idx >= 0)
             {
                 xSemaphoreGive(buf_free[last_idx]);
+                // ESP_LOGI(TAG,"第%d锁释放",last_idx);
             }
             last_idx = idx;
 
             // vTaskDelay(pdMS_TO_TICKS(vpg_frame.duration_ms));
-              vTaskDelay(pdMS_TO_TICKS(1000 / (vpg->fileHeader.fps))); // 补正5fps，防止播放过慢
+            //   vTaskDelay(pdMS_TO_TICKS(1000 / (vpg->fileHeader.fps))); // 补正5fps，防止播放过慢
         }
     }
 }
@@ -186,6 +188,7 @@ static void vpg_decode_task(void *pvParameters)
         uint8_t idx = vpg->lv_buf_cur_idx;
         /* === 关键：等这块缓冲区被显示任务释放 === */
 
+        // ESP_LOGI(TAG,"等待decode第%d索",idx);
         xSemaphoreTake(buf_free[idx], portMAX_DELAY);
 
         // ESP_LOGI(TAG, "===decode open===： %ld", (uint32_t)esp_timer_get_time());
@@ -204,7 +207,10 @@ static void vpg_decode_task(void *pvParameters)
         if (JPEG_ERR_OK == decode_jpg_from_mem(vpg->psram_data, cur_fr_size, &vpg->lv_buf[idx]))
         {
             vpg_frame_t msg = {.buf_idx = idx};
-            xQueueSend(jpg_decode_queue, &msg, 0);
+            if (xQueueSend(jpg_decode_queue, &msg, 0) != pdTRUE) {
+                // 队列满了 / 发送失败，一定要把当前 buffer 还回去
+                ESP_LOGW(TAG, "jpg_decode_queue full, drop frame %d (buf %d)", vpg->cur_frame_idx, idx);
+            }
         }
         else
         {
@@ -223,7 +229,7 @@ static void vpg_decode_task(void *pvParameters)
         // /* 指向下一个解码缓冲区 */
         // vpg->lv_buf_cur_idx = (vpg->lv_buf_cur_idx + 1) % 2; // 0和1切换
         // ESP_LOGI(TAG, "===decode over===： %ld", (uint32_t)esp_timer_get_time());
-        // vTaskDelay(pdMS_TO_TICKS(1000 / (vpg->fileHeader.fps))); // 补正5fps，防止播放过慢
+        vTaskDelay(pdMS_TO_TICKS(1000 / (vpg->fileHeader.fps))); // 补正5fps，防止播放过慢
     }
 }
 
