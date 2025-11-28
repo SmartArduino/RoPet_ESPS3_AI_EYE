@@ -30,14 +30,7 @@ protected:
     esp_lcd_panel_io_handle_t panel_io_ = nullptr;
     esp_lcd_panel_handle_t panel_ = nullptr;
 
-#if CONFIG_BOARD_TYPE_DOIT_ESP32S3_EYE_8311 || CONFIG_BOARD_TYPE_DOIT_ESP32S3_EYE_6824_DIFF
-    esp_lcd_panel_io_handle_t panel_io_2 = nullptr;
-    esp_lcd_panel_handle_t panel_2 = nullptr;
-#endif
 
-#if CONFIG_USE_EYE_STYLE_ES8311 || CONFIG_USE_EYE_STYLE_VB6824
-    SemaphoreHandle_t eye_mutex = NULL; // 魔眼互斥锁
-#endif
 
     lv_draw_buf_t draw_buf_;
     lv_obj_t *status_bar_ = nullptr;
@@ -74,9 +67,6 @@ public:
 
     // Add theme switching function
     virtual void SetTheme(const std::string &theme_name) override;
-#if CONFIG_USE_EYE_STYLE_ES8311 || CONFIG_USE_EYE_STYLE_VB6824                                            // 如果开启魔眼显示
-    virtual void SetEye(int x_start, int y_start, int x_end, int y_end, const void *color_data) override; // 设置眼睛
-#endif
 };
 
 // RGB LCD显示器

@@ -293,10 +293,3 @@ void Display::SetTheme(const std::string &theme_name)
     Settings settings("display", true);
     settings.SetString("theme", theme_name);
 }
-
-#if CONFIG_USE_EYE_STYLE_ES8311 || CONFIG_USE_EYE_STYLE_VB6824 // 如果开启魔眼显示
-// 设置眼睛的位置和颜色
-void Display::SetEye(int x_start, int y_start, int x_end, int y_end, const void *color_data)
-{
-}
-#endif

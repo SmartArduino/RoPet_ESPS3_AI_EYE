@@ -1,0 +1,65 @@
+menu "MIN_PROGRAM_PSD_Configuration"
+    config SUPPORT_MINI_PROGRAMS_REPLACE_PSD
+        bool "支持小程序素材替换（VPG动画眼睛）"
+        depends on IDF_TARGET_ESP32S3
+        help 
+            支持小程序素材替换（VPG动画眼睛）
+            
+    choice
+        prompt "选择素材存储数量"
+            default USE_PSD_ONE
+        depends on SUPPORT_MINI_PROGRAMS_REPLACE_PSD
+        help
+            选择素材存在方式
+    config USE_PSD_ONE
+        bool "只存一个素材"
+        default y
+        depends on SUPPORT_MINI_PROGRAMS_REPLACE_PSD
+        help
+            只存一个素材
+    config USE_PSD_MULTIPLE
+        bool "存多个素材"
+        default n
+        depends on SUPPORT_MINI_PROGRAMS_REPLACE_PSD
+        help
+            存多个素材
+    endchoice
+
+    config USE_PSD_ONE_FILE_NAME
+        string "flash中唯一素材的文件名"
+        depends on USE_PSD_ONE
+        default "vpg_first"
+        help
+            设置 Flash 中唯一素材的文件名。
+
+    config USE_PSD_MULTIPLE_NUM
+        int "flash中同时存在的素材数量"
+        depends on USE_PSD_MULTIPLE
+        default 2
+        range 2 4
+        help
+            设置 Flash 中同时缓存的 PSD 素材最大个数。
+
+    config USE_PSD_MULTIPLE_FILE_FIRST
+        string "素材文件名 #1"
+        default "vpg_first"
+        depends on USE_PSD_MULTIPLE_NUM >= 2
+        help
+            第 1 个 PSD 文件名称（含扩展名）。
+
+    config USE_PSD_MULTIPLE_FILE_SECOND
+        string "素材文件名 #2"
+        default "vpg_second"
+        depends on USE_PSD_MULTIPLE_NUM >= 2
+
+    config USE_PSD_MULTIPLE_FILE_THIRD
+        string "素材文件名 #3"
+        default "vpg_third"
+        depends on USE_PSD_MULTIPLE_NUM >= 3
+
+    config USE_PSD_MULTIPLE_FILE_FOURTH
+        string "素材文件名 #4"
+        default "vpg_fourth"
+        depends on USE_PSD_MULTIPLE_NUM >= 4
+
+endmenu

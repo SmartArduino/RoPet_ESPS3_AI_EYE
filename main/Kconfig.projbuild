@@ -273,8 +273,6 @@ choice BOARD_TYPE
         bool "Doit-AI-SPEAKER"
     config BOARD_TYPE_DOIT_ESP32S3_EYE_6824
         bool "doit-esp32s3-eye-6824"
-    config BOARD_TYPE_DOIT_ESP32S3_EYE_8311
-        bool "doit-esp32s3-eye-8311"
     config BOARD_TYPE_DOIT_ESP32S3_EYE_6824_V2
         bool "doit-esp32s3-eye-6824-v2"
 endchoice
@@ -393,19 +391,6 @@ choice
         bool "Blufi"
 endchoice
 
-config USE_EYE_STYLE_ES8311
-    bool "使用魔眼界面风格(ES8311)"
-    default n
-    depends on BOARD_TYPE_DOIT_ESP32S3_EYE_8311
-    help
-        使用魔眼界面风格(ES8311)
-
-config USE_EYE_STYLE_VB6824
-    bool "使用魔眼界面风格(VB6824)"
-    default n
-    depends on BOARD_TYPE_DOIT_ESP32S3_EYE_6824 || BOARD_TYPE_DOIT_ESP32S3_EYE_6824_V2
-    help
-        使用魔眼界面风格(VB6824)
 
 config USE_WECHAT_MESSAGE_STYLE
     bool "Enable WeChat Message Style"

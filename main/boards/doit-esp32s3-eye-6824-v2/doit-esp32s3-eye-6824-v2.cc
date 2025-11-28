@@ -7,7 +7,7 @@
 #include "button.h"
 #include "config.h"
 #include "led/single_led.h"
-#include "power_save_timer.h"
+// #include "power_save_timer.h"
 
 #include <wifi_station.h>
 #include <esp_log.h>
@@ -17,10 +17,15 @@
 #include <esp_lcd_panel_ops.h>
 #include <driver/spi_common.h>
 
+#include "mcp_server.h"
+#include "assets/lang_config.h"
+#include "anim_eye_display.h"
+#include "mcp_server.h"
 #include "lcd_cmd.h"
 
-#include "m_touch_button.h"
-#include "motor.h"
+#include "doit_ble.h"
+#include "doit_file.h"
+
 
 #define TAG "CompactWifiBoardLCD"
 
@@ -85,29 +90,67 @@ private:
         boot_button_.OnClick([this]()
                              {
                                  ESP_LOGI(TAG, "Boot button clicked");
+                                 if(min_program_in_ota_mode()){
+                                    ESP_LOGI(TAG, "In PSD Ota Mode, restart system");
+                                    esp_restart();
+                                 }
                                  // 获取应用程序实例
                                  auto &app = Application::GetInstance();
-                                app.ToggleChatState(); });
+                                 app.ToggleChatState(); });
 
 #if (defined(CONFIG_VB6824_OTA_SUPPORT) && CONFIG_VB6824_OTA_SUPPORT == 1)
         boot_button_.OnDoubleClick([this]()
                                    {
-            if (esp_timer_get_time() > 20 * 1000 * 1000)
-            {
+
+    if (esp_timer_get_time() > 20 * 1000 * 1000){
                 ESP_LOGI(TAG, "Long press, do not enter OTA mode %ld", (uint32_t)esp_timer_get_time());
+#if CONFIG_USE_PSD_MULTIPLE
+        
+            doit_file_psd_multi_process(true);
+#endif
                 return;
-            }
-            audio_codec.OtaStart(0); });
+        }else{
+audio_codec.OtaStart(0);
+        } });
 #endif
 
         boot_button_.OnPressRepeaDone([this](uint16_t count)
                                       {
+#if CONFIG_SUPPORT_MINI_PROGRAMS_REPLACE_PSD
+                                          if (count >= 5)
+                                          {
+                                             auto &app = Application::GetInstance();
+                                            if (esp_timer_get_time() > 20 * 1000 * 1000 && app.GetDeviceState() == kDeviceStateIdle && WifiStation::GetInstance().IsConnected() && !min_program_in_ota_mode()){
+                ESP_LOGI(TAG, "five press repeadone, do not enter PSD mode %ld", (uint32_t)esp_timer_get_time());
+                return;
+        }
+                                                     ESP_LOGI(TAG, "素材替换模式");
+    
+                                                Application::GetInstance().Schedule([]{
+Application::GetInstance().ResetDecoder();
+                                                  Application::GetInstance().PlaySound(Lang::Sounds::P3_SUCAI);
+                                                                                 vTaskDelay(2000);                min_program_ble_start();
+                                                });
+                                             
+                                              
+                                          } else
+#endif
                                          if (count >= 3)
                                           {
                                               ESP_LOGI(TAG, "重新配网");
                                               ResetWifiConfiguration();
                                           } });
     }
+
+    // // 物联网初始化，添加对 AI 可见设备
+    // void
+    // InitializeIot()
+    // {
+    //     auto &thing_manager = iot::ThingManager::GetInstance();
+    //     thing_manager.AddThing(iot::CreateThing("Speaker"));
+    //     thing_manager.AddThing(iot::CreateThing("Screen"));
+    //     // thing_manager.AddThing(iot::CreateThing("Lamp"));
+    // }
 
     void InitializeSpi()
     {
@@ -165,7 +208,16 @@ private:
         esp_lcd_panel_mirror(panel, false, false);
         esp_lcd_panel_disp_on_off(panel, true);
         esp_lcd_panel_init(panel);
-
+#if CONFIG_USE_AVI_ANIM_EYE || CONFIG_SUPPORT_MINI_PROGRAMS_REPLACE_PSD
+        display_ = new AnimEyeDisplay(panel_io, panel,
+                                      DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X,
+                                      DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY,
+                                      {
+                                          .text_font = &font_puhui_20_4,
+                                          .icon_font = &font_awesome_20_4,
+                                          .emoji_font = font_emoji_64_init(),
+                                      });
+#else
         display_ = new SpiLcdDisplay(panel_io, panel,
                                      DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X,
                                      DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY,
@@ -174,7 +226,7 @@ private:
                                          .icon_font = &font_awesome_20_4,
                                          .emoji_font = font_emoji_64_init(),
                                      });
-
+#endif
         gpio_config_t bk_gpio_config = {
             .pin_bit_mask = 1ULL << QSPI_PIN_NUM_LCD_BL,
             .mode = GPIO_MODE_OUTPUT,
@@ -188,7 +240,7 @@ private:
         io_config.cs_gpio_num = SPI_LCD_GPIO_CS;
         io_config.dc_gpio_num = SPI_LCD_GPIO_DC;
         io_config.spi_mode = 0;
-        io_config.pclk_hz = 20 * 1000 * 1000;
+        io_config.pclk_hz = 40 * 1000 * 1000;
         io_config.trans_queue_depth = 10;
         io_config.lcd_cmd_bits = 8;
         io_config.lcd_param_bits = 8;
@@ -203,6 +255,7 @@ private:
         };
         esp_lcd_panel_dev_config_t panel_config = {};
         panel_config.reset_gpio_num = SPI_LCD_GPIO_RST;
+        panel_config.color_space = ESP_LCD_COLOR_SPACE_RGB;
         panel_config.rgb_ele_order = DISPLAY_RGB_ORDER;
         panel_config.bits_per_pixel = 16;
         panel_config.vendor_config = &st7796_vendor_config;
@@ -232,6 +285,20 @@ private:
         ESP_ERROR_CHECK(esp_lcd_panel_invert_color(panel, DISPLAY_COLOR_INVERT));
         ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel, true));
 
+#if CONFIG_USE_AVI_ANIM_EYE || CONFIG_SUPPORT_MINI_PROGRAMS_REPLACE_PSD
+        display_ = new AnimEyeDisplay(panel_io, panel,
+                                      DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X,
+                                      DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY,
+                                      {
+#if CONFIG_LCD_GC9A01_240X240 || CONFIG_LCD_ST7796_240X240
+                                          .text_font = &font_puhui_20_4,
+                                          .icon_font = &font_awesome_20_4,
+#elif CONFIG_LCD_GC9A01_160X160
+                                          .text_font = &font_puhui_14_1,
+                                          .icon_font = &font_awesome_14_1,
+#endif
+                                          .emoji_font = font_emoji_64_init()});
+#else
         display_ = new SpiLcdDisplay(panel_io, panel,
                                      DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X,
                                      DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY,
@@ -244,6 +311,8 @@ private:
                                          .icon_font = &font_awesome_14_1,
 #endif
                                          .emoji_font = font_emoji_64_init()});
+
+#endif
         gpio_config_t config;
         config.pin_bit_mask = BIT64(SPI_LCD_BL);
         config.mode = GPIO_MODE_OUTPUT;
@@ -255,6 +324,45 @@ private:
 #endif
 #if CONFIG_LCD_GC9A01_160X160 || CONFIG_LCD_ST7796_240X240 || CONFIG_LCD_ST77916_360X360
         GetBacklight()->SetBrightness(100);
+#endif
+    }
+
+    void InitializeTools()
+    {
+        auto &mcp_server = McpServer::GetInstance();
+
+#if CONFIG_USE_AVI_ANIM_EYE
+        // mcp_server.AddTool("self.screen.set_eye_theme",
+        //                    "Set the eye theme of the screen. Available themes:ocean、love heart、 dream、 rainbow.The names of the eyes that are issued can only be one of the four listed above.",
+        mcp_server.AddTool("self.screen.set_eye_theme",
+                           "Set the eye theme of the screen. Available themes:海洋、爱心、 梦境、 彩虹.The names of the eyes that are issued can only be one of the four listed above.",
+                           PropertyList({Property("eye_name", kPropertyTypeString)}),
+                           [](const PropertyList &properties) -> ReturnValue
+                           {
+                               std::string theme_name = properties["eye_name"].value<std::string>();
+                               auto display = Board::GetInstance().GetDisplay();
+                               if (display)
+                               {
+                                   ESP_LOGI(TAG, "Set eye theme: %s", theme_name.c_str());
+                                   display->SetEyeTheme(theme_name);
+                               }
+                               return true;
+                           });
+#elif CONFIG_SUPPORT_MINI_PROGRAMS_REPLACE_PSD
+        mcp_server.AddTool("self.screen.set_psd",
+                           "Set the display of screen materials. The available values are 1, 2, and 3. It is not possible to return any number other than these three. If the user specifies a number that is not within this range, randomly return one of these three numbers..",
+                           PropertyList({Property("psd_name", kPropertyTypeInteger)}),
+                           [](const PropertyList &properties) -> ReturnValue
+                           {
+                               uint8_t psd_order = properties["psd_name"].value<int>();
+                               auto display = static_cast<AnimEyeDisplay *>(Board::GetInstance().GetDisplay());
+                               if (display)
+                               {
+                                   ESP_LOGI(TAG, "Set psd theme: %d", psd_order);
+                                   //    display->SetPSD(psd_order);
+                               }
+                               return true;
+                           });
 #endif
     }
 
@@ -275,6 +383,39 @@ private:
     //     }
 
     //     ESP_LOGI(TAG, "扫描完成，共发现 %d 个设备", found);
+    // }
+    // inline uint8_t SL_SC7A20H_I2c_Spi_Write(uint8_t sl_spi_iic,
+    //                                         uint8_t reg,
+    //                                         uint8_t dat)
+    // {
+    //     if (sl_spi_iic != 1)
+    //         return 0; // 只跑 I2C
+    //     uint8_t buf[2] = {reg, dat};
+    //     return i2c_master_transmit(sc7a20h_dev_handle, buf, sizeof(buf), -1) == ESP_OK ? 1 : 0;
+    // }
+
+    // void AccTaskEntry(void *)
+    // {
+    //     int16_t x, y, z;
+    //     uint8_t raw[6];
+    //     for (;;)
+    //     {
+    //         /* 一次读 6 字节，自动递增 */
+    //         if (i2c_master_transmit_receive(sc7a20h_dev_handle,
+    //                                         (uint8_t[]){0x28 | 0x80}, 1,
+    //                                         raw, 6, pdMS_TO_TICKS(100)) == ESP_OK)
+    //         {
+    //             x = (int16_t)((raw[1] << 8) | raw[0]) >> 4;
+    //             y = (int16_t)((raw[3] << 8) | raw[2]) >> 4;
+    //             z = (int16_t)((raw[5] << 8) | raw[4]) >> 4;
+    //             ESP_LOGI("ACC", "X:%6d Y:%6d Z:%6d", x, y, z);
+    //         }
+    //         else
+    //         {
+    //             ESP_LOGE("ACC", "read fail");
+    //         }
+    //         vTaskDelay(pdMS_TO_TICKS(100)); // 100 Hz 采样
+    //     }
     // }
 
     // esp_err_t sc7a20h_write_byte(uint8_t reg, uint8_t value)
@@ -456,19 +597,20 @@ public:
         InitializeDisplay();
         // 初始化按钮
         InitializeButtons();
+#if CONFIG_USE_AVI_ANIM_EYE
+        InitializeTools();
+#endif
 
-        // motor_init(TEMP_EN);
-        // touch_button_init();
-
-        // // InitializePowerSaveTimer();
+        // InitializePowerSaveTimer();
 
         // 设置音频编解码器唤醒回调函数
         audio_codec.OnWakeUp([this](const std::string &command)
                              {
             // 如果唤醒词为vb6824_get_wakeup_word()，则唤醒设备
             if (command == std::string(vb6824_get_wakeup_word())){
-                if(Application::GetInstance().GetDeviceState() != kDeviceStateListening){
+                if(Application::GetInstance().GetDeviceState() != kDeviceStateListening && !min_program_in_ota_mode()){
                     ESP_LOGI(TAG, "Wake word detected: %s", command.c_str());
+                    ESP_LOGI(TAG,"min_program_in_ota_mode=%d",min_program_in_ota_mode());
                     Application::GetInstance().WakeWordInvoke("你好小智");
                 }
             // 如果唤醒词为"开始配网"，则重置WiFi配置
@@ -478,6 +620,9 @@ public:
         audio_codec.SetOutputVolume(100);
 
         // InitializeSC7A20H();
+
+        // motor_init(TEMP_EN);
+        // touch_button_init();
     }
 
     virtual Led *GetLed() override

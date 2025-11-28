@@ -30,9 +30,6 @@ public:
     virtual std::string GetTheme() { return current_theme_name_; }
     virtual void UpdateStatusBar(bool update_all = false);
 
-     #if CONFIG_USE_EYE_STYLE_ES8311 || CONFIG_USE_EYE_STYLE_VB6824  //如果开启魔眼显示
-        virtual void SetEye(int x_start, int y_start, int x_end, int y_end, const void *color_data);
-    #endif
 
     inline int width() const { return width_; }
     inline int height() const { return height_; }
