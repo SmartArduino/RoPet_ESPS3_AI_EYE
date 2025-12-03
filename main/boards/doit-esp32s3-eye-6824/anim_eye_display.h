@@ -17,13 +17,18 @@ public:
 
     virtual ~AnimEyeDisplay() = default;
 
-    // 重写表情设置方法
-    virtual void SetEmotion(const char *emotion) override;
+#if CONFIG_USE_AVI_ANIM_EYE
+    virtual void SetEyeTheme(const std::string &eye_theme_name) override;
+#endif
+#if CONFIG_SUPPORT_MINI_PROGRAMS_REPLACE_PSD
+    void UpdateAnimContainer();
+    void SetPSD(uint8_t psd_order);
+#endif
 
-    // 重写聊天消息设置方法
-    virtual void SetChatMessage(const char *role, const char *content) override;
-
+    lv_obj_t *psd_container_ = nullptr;
+    lv_obj_t *psd_obj_ = nullptr;
 
 private:
     void SetupAnimContainer();
+
 };

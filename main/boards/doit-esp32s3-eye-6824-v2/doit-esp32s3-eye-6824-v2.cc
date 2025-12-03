@@ -143,16 +143,6 @@ Application::GetInstance().ResetDecoder();
                                           } });
     }
 
-    // // 物联网初始化，添加对 AI 可见设备
-    // void
-    // InitializeIot()
-    // {
-    //     auto &thing_manager = iot::ThingManager::GetInstance();
-    //     thing_manager.AddThing(iot::CreateThing("Speaker"));
-    //     thing_manager.AddThing(iot::CreateThing("Screen"));
-    //     // thing_manager.AddThing(iot::CreateThing("Lamp"));
-    // }
-
     void InitializeSpi()
     {
         ESP_LOGI(TAG, "Initialize QSPI bus");
@@ -209,7 +199,7 @@ Application::GetInstance().ResetDecoder();
         esp_lcd_panel_mirror(panel, false, false);
         esp_lcd_panel_disp_on_off(panel, true);
         esp_lcd_panel_init(panel);
-#if CONFIG_USE_AVI_ANIM_EYE || CONFIG_SUPPORT_MINI_PROGRAMS_REPLACE_PSD
+#if  CONFIG_SUPPORT_MINI_PROGRAMS_REPLACE_PSD
         display_ = new AnimEyeDisplay(panel_io, panel,
                                       DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X,
                                       DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY,
@@ -286,7 +276,7 @@ Application::GetInstance().ResetDecoder();
         ESP_ERROR_CHECK(esp_lcd_panel_invert_color(panel, DISPLAY_COLOR_INVERT));
         ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel, true));
 
-#if CONFIG_USE_AVI_ANIM_EYE || CONFIG_SUPPORT_MINI_PROGRAMS_REPLACE_PSD
+#if CONFIG_SUPPORT_MINI_PROGRAMS_REPLACE_PSD
         display_ = new AnimEyeDisplay(panel_io, panel,
                                       DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X,
                                       DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY,
@@ -331,257 +321,8 @@ Application::GetInstance().ResetDecoder();
     void InitializeTools()
     {
         auto &mcp_server = McpServer::GetInstance();
-
-#if CONFIG_USE_AVI_ANIM_EYE
-        // mcp_server.AddTool("self.screen.set_eye_theme",
-        //                    "Set the eye theme of the screen. Available themes:ocean、love heart、 dream、 rainbow.The names of the eyes that are issued can only be one of the four listed above.",
-        mcp_server.AddTool("self.screen.set_eye_theme",
-                           "Set the eye theme of the screen. Available themes:海洋、爱心、 梦境、 彩虹.The names of the eyes that are issued can only be one of the four listed above.",
-                           PropertyList({Property("eye_name", kPropertyTypeString)}),
-                           [](const PropertyList &properties) -> ReturnValue
-                           {
-                               std::string theme_name = properties["eye_name"].value<std::string>();
-                               auto display = Board::GetInstance().GetDisplay();
-                               if (display)
-                               {
-                                   ESP_LOGI(TAG, "Set eye theme: %s", theme_name.c_str());
-                                   display->SetEyeTheme(theme_name);
-                               }
-                               return true;
-                           });
-#elif CONFIG_SUPPORT_MINI_PROGRAMS_REPLACE_PSD
-        mcp_server.AddTool("self.screen.set_psd",
-                           "Set the display of screen materials. The available values are 1, 2, and 3. It is not possible to return any number other than these three. If the user specifies a number that is not within this range, randomly return one of these three numbers..",
-                           PropertyList({Property("psd_name", kPropertyTypeInteger)}),
-                           [](const PropertyList &properties) -> ReturnValue
-                           {
-                               uint8_t psd_order = properties["psd_name"].value<int>();
-                               auto display = static_cast<AnimEyeDisplay *>(Board::GetInstance().GetDisplay());
-                               if (display)
-                               {
-                                   ESP_LOGI(TAG, "Set psd theme: %d", psd_order);
-                                   //    display->SetPSD(psd_order);
-                               }
-                               return true;
-                           });
-#endif
     }
 
-    //===============================================SC7A20H传感器========================================
-    // void I2C_ScanBus()
-    // {
-    //     ESP_LOGI(TAG, "开始 I2C 扫描（新驱动）...");
-
-    //     /* 2. 逐地址探测 */
-    //     int found = 0;
-    //     for (uint8_t addr = 0x08; addr <= 0x77; ++addr)
-    //     {
-    //         if (i2c_master_probe(sc7a20h_bus_handle, addr, 50) == ESP_OK)
-    //         {
-    //             ESP_LOGI(TAG, "发现设备 at 0x%02X", addr);
-    //             ++found;
-    //         }
-    //     }
-
-    //     ESP_LOGI(TAG, "扫描完成，共发现 %d 个设备", found);
-    // }
-    // inline uint8_t SL_SC7A20H_I2c_Spi_Write(uint8_t sl_spi_iic,
-    //                                         uint8_t reg,
-    //                                         uint8_t dat)
-    // {
-    //     if (sl_spi_iic != 1)
-    //         return 0; // 只跑 I2C
-    //     uint8_t buf[2] = {reg, dat};
-    //     return i2c_master_transmit(sc7a20h_dev_handle, buf, sizeof(buf), -1) == ESP_OK ? 1 : 0;
-    // }
-
-    // void AccTaskEntry(void *)
-    // {
-    //     int16_t x, y, z;
-    //     uint8_t raw[6];
-    //     for (;;)
-    //     {
-    //         /* 一次读 6 字节，自动递增 */
-    //         if (i2c_master_transmit_receive(sc7a20h_dev_handle,
-    //                                         (uint8_t[]){0x28 | 0x80}, 1,
-    //                                         raw, 6, pdMS_TO_TICKS(100)) == ESP_OK)
-    //         {
-    //             x = (int16_t)((raw[1] << 8) | raw[0]) >> 4;
-    //             y = (int16_t)((raw[3] << 8) | raw[2]) >> 4;
-    //             z = (int16_t)((raw[5] << 8) | raw[4]) >> 4;
-    //             ESP_LOGI("ACC", "X:%6d Y:%6d Z:%6d", x, y, z);
-    //         }
-    //         else
-    //         {
-    //             ESP_LOGE("ACC", "read fail");
-    //         }
-    //         vTaskDelay(pdMS_TO_TICKS(100)); // 100 Hz 采样
-    //     }
-    // }
-
-    // esp_err_t sc7a20h_write_byte(uint8_t reg, uint8_t value)
-    // {
-    //     uint8_t buf[2] = {reg, value};
-
-    //     /* new driver 一次写命令+数据 */
-    //     return i2c_master_transmit(sc7a20h_dev_handle, buf, sizeof(buf), pdMS_TO_TICKS(1000));
-    // }
-
-    // esp_err_t sc7a20h_read_bytes(uint8_t reg, uint8_t *data, size_t len)
-    // {
-    //     /* 第一步：把寄存器地址发出去 */
-    //     esp_err_t ret = i2c_master_transmit(sc7a20h_dev_handle, &reg, 1, pdMS_TO_TICKS(1000));
-    //     if (ret != ESP_OK)
-    //     {
-    //         return ret;
-    //     }
-
-    //     /* 第二步：重启总线，读回 len 字节 */
-    //     return i2c_master_receive(sc7a20h_dev_handle, data, len, pdMS_TO_TICKS(1000));
-    // }
-
-    /**
-     * @brief 读取加速度数据(12位分辨率)
-     * @param x X轴加速度输出(单位: mg, 范围: ±2000mg)
-     * @param y Y轴加速度输出(单位: mg, 范围: ±2000mg)
-     * @param z Z轴加速度输出(单位: mg, 范围: ±2000mg)
-     * @return esp_err_t ESP_OK表示成功
-     *
-     * 该函数一次性读取OUT_X_L_REG(0x28)到OUT_Z_H_REG(0x2D)共6个寄存器，
-     * 将高低字节组合成16位数据后右移4位(12位有效数据)，
-     * 根据CTRL_REG4配置的±4g量程，1LSB对应1mg
-     */
-    // esp_err_t sc7a20h_read_accel(int16_t *x, int16_t *y, int16_t *z)
-    // {
-    //     if (x == NULL || y == NULL || z == NULL)
-    //     {
-    //         ESP_LOGE(TAG, "无效的输出指针");
-    //         return ESP_ERR_INVALID_ARG;
-    //     }
-
-    //     uint8_t data[6] = {0};
-    //     esp_err_t err_XL = sc7a20h_read_bytes(OUT_X_L_REG, &data[0], 1);
-    //     if (err_XL != ESP_OK)
-    //     {
-    //         ESP_LOGE(TAG, "读取加速度数据失败: 0x%x", err_XL);
-    //         return err_XL;
-    //     }
-    //     esp_err_t err_XH = sc7a20h_read_bytes(OUT_X_H_REG, &data[1], 1);
-    //     if (err_XH != ESP_OK)
-    //     {
-    //         ESP_LOGE(TAG, "读取加速度数据失败: 0x%x", err_XH);
-    //         return err_XH;
-    //     }
-    //     esp_err_t err_YL = sc7a20h_read_bytes(OUT_Y_L_REG, &data[2], 1);
-    //     if (err_YL != ESP_OK)
-    //     {
-    //         ESP_LOGE(TAG, "读取加速度数据失败: 0x%x", err_YL);
-    //         return err_YL;
-    //     }
-    //     esp_err_t err_YH = sc7a20h_read_bytes(OUT_Y_H_REG, &data[3], 1);
-    //     if (err_YH != ESP_OK)
-    //     {
-    //         ESP_LOGE(TAG, "读取加速度数据失败: 0x%x", err_YH);
-    //         return err_YH;
-    //     }
-    //     esp_err_t err_ZL = sc7a20h_read_bytes(OUT_Z_L_REG, &data[4], 1);
-    //     if (err_ZL != ESP_OK)
-    //     {
-    //         ESP_LOGE(TAG, "读取加速度数据失败: 0x%x", err_ZL);
-    //         return err_ZL;
-    //     }
-    //     esp_err_t err_ZH = sc7a20h_read_bytes(OUT_Z_H_REG, &data[5], 1);
-    //     if (err_ZH != ESP_OK)
-    //     {
-    //         ESP_LOGE(TAG, "读取加速度数据失败: 0x%x", err_ZH);
-    //         return err_ZH;
-    //     }
-
-    //     // 组合高低字节(16位有符号数)
-    //     int16_t raw_x = (int16_t)((data[1] << 8) | data[0]);
-    //     int16_t raw_y = (int16_t)((data[3] << 8) | data[2]);
-    //     int16_t raw_z = (int16_t)((data[5] << 8) | data[4]);
-
-    //     // ±4g量程时 1LSB = 1mg
-    //     *x = raw_x;
-    //     *y = raw_y;
-    //     *z = raw_z;
-
-    //     // // 转换为g值(1g = 1000mg)
-    //     // float g_x = raw_x / 1000.0f;
-    //     // float g_y = raw_y / 1000.0f;
-    //     // float g_z = raw_z / 1000.0f;
-
-    //     // ESP_LOGI(TAG, "加速度数据: X=%.2fmg(0x%04X) Y=%.2fmg(0x%04X) Z=%.2fmg(0x%04X)",
-    //     //          (float)raw_x, (uint16_t)raw_x,
-    //     //          (float)raw_y, (uint16_t)raw_y,
-    //     //          (float)raw_z, (uint16_t)raw_z);
-    //     // ESP_LOGI(TAG, "Accel X:%.2fg Y:%.2fg Z:%.2fg", g_x, g_y, g_z);
-
-    //     return ESP_OK;
-    // }
-
-    // void InitializeSC7A20H(void)
-    // {
-    //     /* 1. 创建 I2C 主机总线 */
-    //     i2c_master_bus_config_t i2c_bus_config = {
-    //         .i2c_port = SC7A20H_I2C_PORT,
-    //         .sda_io_num = SC7A20H_I2C_SDA,
-    //         .scl_io_num = SC7A20H_I2C_SCL,
-    //         .clk_source = I2C_CLK_SRC_DEFAULT,
-    //         .glitch_ignore_cnt = 7,
-    //         .flags = {
-    //             .enable_internal_pullup = 1,
-    //         },
-    //     };
-
-    //     ESP_ERROR_CHECK(i2c_new_master_bus(&i2c_bus_config, &sc7a20h_bus_handle));
-    //     I2C_ScanBus();
-    //     /* 2. 初始化传感器 */
-
-    //     i2c_device_config_t sc7a20h_cfg = {
-    //         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
-    //         .device_address = SC7A20H_I2C_ADDR,
-    //         .scl_speed_hz = 400 * 1000,
-    //     };
-    //     ESP_ERROR_CHECK(i2c_master_bus_add_device(sc7a20h_bus_handle, &sc7a20h_cfg, &sc7a20h_dev_handle));
-
-    //     uint8_t who_am_i;
-    //     esp_err_t err = sc7a20h_read_bytes(WHO_AM_I_REG, &who_am_i, 1);
-    //     if (err != ESP_OK)
-    //     {
-    //         ESP_LOGE(TAG, "读取WHO_AM_I寄存器失败: 0x%x", err);
-    //         return;
-    //     }
-
-    //     if (who_am_i != 0x11)
-    //     {
-    //         ESP_LOGE(TAG, "无效的WHO_AM_I值: 0x%02X (期望值: 0x11)", who_am_i);
-    //         return;
-    //     }
-
-    //     // 配置加速度计: 100Hz输出数据率, ±4g量程
-    //     sc7a20h_write_byte(CTRL_REG1, 0x57); // CTRL_REG1
-    //     if (err != ESP_OK)
-    //     {
-    //         ESP_LOGE(TAG, "写入CTRL_REG1失败: 0x%x", err);
-    //         return;
-    //     }
-    //     sc7a20h_write_byte(CTRL_REG4, 0x01); // CTRL_REG4
-    //     if (err != ESP_OK)
-    //     {
-    //         ESP_LOGE(TAG, "写入CTRL_REG4失败: 0x%x", err);
-    //     }
-
-    //     int16_t x, y, z;
-    //     if (sc7a20h_read_accel(&x, &y, &z) == ESP_OK)
-    //     {
-    //         ESP_LOGI(TAG, "Accel X:%.2fg Y:%.2fg Z:%.2fg",
-    //                  x * 0.004f, y * 0.004f, z * 0.004f);
-    //     }
-
-    // }
-    //==========================================================================================
 
 public:
     CompactWifiBoardLCD() : boot_button_(BOOT_BUTTON_GPIO), audio_codec(CODEC_RX_GPIO, CODEC_TX_GPIO)
@@ -598,9 +339,6 @@ public:
         InitializeDisplay();
         // 初始化按钮
         InitializeButtons();
-#if CONFIG_USE_AVI_ANIM_EYE
-        InitializeTools();
-#endif
 
         // InitializePowerSaveTimer();
 

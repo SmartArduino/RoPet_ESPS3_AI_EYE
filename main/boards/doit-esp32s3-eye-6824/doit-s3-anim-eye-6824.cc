@@ -18,16 +18,14 @@
 #include <driver/spi_common.h>
 #include <esp_lcd_gc9a01.h>
 #include "mcp_server.h"
-#if CONFIG_USE_EYE_STYLE_ES8311
-#include "touch_button.h"
-#endif
 #include "assets/lang_config.h"
 #include <ssid_manager.h>
 #include "mcp_server.h"
 
-#if CONFIG_USE_ANIM_EYE
+#include "doit_ble.h"
+#include "doit_file.h"
 #include "anim_eye_display.h"
-#endif
+
 
 #define TAG "CompactWifiBoardLCD"
 
@@ -159,50 +157,63 @@ private:
         power_save_timer_->SetEnabled(true);
     }
 
-    // 初始化按钮
-    void InitializeButtons()
+void InitializeButtons()
     {
         // 当boot_button_被点击时，执行以下操作
         boot_button_.OnClick([this]()
                              {
-            // 获取应用程序实例
-            auto& app = Application::GetInstance();
-            // 如果设备状态为kDeviceStateStarting且WifiStation未连接，则重置Wifi配置
-            if (app.GetDeviceState() == kDeviceStateStarting && !WifiStation::GetInstance().IsConnected()) {
-                ResetWifiConfiguration();
-            }
-            // 切换聊天状态
-            app.ToggleChatState(); });
+                                 ESP_LOGI(TAG, "Boot button clicked");
+                                 if(min_program_in_ota_mode()){
+                                    ESP_LOGI(TAG, "In PSD Ota Mode, restart system");
+                                    esp_restart();
+                                 }
+                                 // 获取应用程序实例
+                                 auto &app = Application::GetInstance();
+                                 app.ToggleChatState(); });
 
-        boot_button_.OnPressRepeat([this](uint16_t count)
-                                   {
-            if(count >= 3){
-                ESP_LOGI(TAG, "重新配网");
-                ResetWifiConfiguration();
-            } });
 #if (defined(CONFIG_VB6824_OTA_SUPPORT) && CONFIG_VB6824_OTA_SUPPORT == 1)
         boot_button_.OnDoubleClick([this]()
                                    {
-            if (esp_timer_get_time() > 20 * 1000 * 1000) {
-                ESP_LOGI(TAG, "Long press, do not enter OTA mode %ld", (uint32_t)esp_timer_get_time());
-                return;
-            }
-            audio_codec.OtaStart(0); });
-#endif
-        // boot_button_.OnDoubleClick([this]() {
-        //     auto& app = Application::GetInstance();
-        //     app.eye_style_num = (app.eye_style_num+1) % 8;
-        //     app.eye_style(app.eye_style_num);
-        // });
-    }
 
-    // 物联网初始化，添加对 AI 可见设备
-    void InitializeIot()
-    {
-        auto &thing_manager = iot::ThingManager::GetInstance();
-        thing_manager.AddThing(iot::CreateThing("Speaker"));
-        thing_manager.AddThing(iot::CreateThing("Screen"));
-        // thing_manager.AddThing(iot::CreateThing("Lamp"));
+    // if (esp_timer_get_time() > 20 * 1000 * 1000){
+                ESP_LOGI(TAG, "Long press, do not enter OTA mode %ld", (uint32_t)esp_timer_get_time());
+#if CONFIG_USE_PSD_MULTIPLE
+        
+            doit_file_psd_multi_process(true);
+#endif
+                return;
+//         }else{
+// audio_codec.OtaStart(0);
+//         } 
+    });
+#endif
+
+        boot_button_.OnPressRepeaDone([this](uint16_t count)
+                                      {
+#if CONFIG_SUPPORT_MINI_PROGRAMS_REPLACE_PSD
+                                          if (count >= 5)
+                                          {
+                                             auto &app = Application::GetInstance();
+                                            if (esp_timer_get_time() > 20 * 1000 * 1000 && app.GetDeviceState() == kDeviceStateIdle && WifiStation::GetInstance().IsConnected() && !min_program_in_ota_mode()){
+                ESP_LOGI(TAG, "five press repeadone, do not enter PSD mode %ld", (uint32_t)esp_timer_get_time());
+                return;
+        }
+                                                     ESP_LOGI(TAG, "素材替换模式");
+    
+                                                Application::GetInstance().Schedule([]{
+Application::GetInstance().ResetDecoder();
+                                                  Application::GetInstance().PlaySound(Lang::Sounds::P3_SUCAI);
+                                                                                 vTaskDelay(2000);                min_program_ble_start();
+                                                });
+                                             
+                                              
+                                          } else
+#endif
+                                         if (count >= 3)
+                                          {
+                                              ESP_LOGI(TAG, "重新配网");
+                                              ResetWifiConfiguration();
+                                          } });
     }
 
     // GC9A01-SPI2初始化-用于显示小智
@@ -261,7 +272,7 @@ private:
         esp_lcd_panel_init(lcd_panel);
         esp_lcd_panel_invert_color(lcd_panel, DISPLAY_COLOR_INVERT);
         esp_lcd_panel_disp_on_off(lcd_panel, true);
-#if CONFIG_USE_ANIM_EYE
+#if CONFIG_SUPPORT_MINI_PROGRAMS_REPLACE_PSD
         display_ = new AnimEyeDisplay(lcd_io, lcd_panel,
                                       DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X, DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY,
                                       {
@@ -290,78 +301,6 @@ private:
 #endif
     }
 
-    // virtual void StartNetwork() override
-    // {
-
-    //     // User can press BOOT button while starting to enter WiFi configuration mode
-    //     if (wifi_config_mode_)
-    //     {
-    //         EnterWifiConfigMode();
-    //         return;
-    //     }
-
-    //     // If no WiFi SSID is configured, enter WiFi configuration mode
-    //     auto &ssid_manager = SsidManager::GetInstance();
-    //     auto ssid_list = ssid_manager.GetSsidList();
-    //     if (ssid_list.empty())
-    //     {
-    //         wifi_config_mode_ = true;
-    //         EnterWifiConfigMode();
-    //         return;
-    //     }
-
-    //     auto &wifi_station = WifiStation::GetInstance();
-    //     wifi_station.OnScanBegin([this]()
-    //                              {
-    //     auto display = Board::GetInstance().GetDisplay();
-    //     display->ShowNotification(Lang::Strings::SCANNING_WIFI, 30000); });
-    //     wifi_station.OnConnect([this](const std::string &ssid)
-    //                            {
-    //     auto display = Board::GetInstance().GetDisplay();
-    //     std::string notification = Lang::Strings::CONNECT_TO;
-    //     notification += ssid;
-    //     notification += "...";
-    //     display->ShowNotification(notification.c_str(), 30000); });
-    //     wifi_station.OnConnected([this](const std::string &ssid)
-    //                              {
-    //                                  auto display = Board::GetInstance().GetDisplay();
-    //                                  std::string notification = Lang::Strings::CONNECTED_TO;
-    //                                  notification += ssid;
-    //                                  display->ShowNotification(notification.c_str(), 30000); });
-    //     wifi_station.Start();
-
-    //     // Try to connect to WiFi, if failed, launch the WiFi configuration AP
-    //     if (!wifi_station.WaitForConnected(60 * 1000))
-    //     {
-    //         wifi_station.Stop();
-    //         wifi_config_mode_ = true;
-    //         EnterWifiConfigMode();
-    //         return;
-    //     }
-    // }
-
-#if CONFIG_USE_AVI_ANIM_EYE
-    void InitializeTools()
-    {
-        auto &mcp_server = McpServer::GetInstance();
-        // mcp_server.AddTool("self.screen.set_eye_theme",
-        //                    "Set the eye theme of the screen. Available themes:ocean、love heart、 dream、 rainbow.The names of the eyes that are issued can only be one of the four listed above.",
-        mcp_server.AddTool("self.screen.set_eye_theme",
-                           "Set the eye theme of the screen. Available themes:海洋、爱心、 梦境、 彩虹.The names of the eyes that are issued can only be one of the four listed above.",
-                           PropertyList({Property("eye_name", kPropertyTypeString)}),
-                           [](const PropertyList &properties) -> ReturnValue
-                           {
-                               std::string theme_name = properties["eye_name"].value<std::string>();
-                               auto display = Board::GetInstance().GetDisplay();
-                               if (display)
-                               {
-                                   ESP_LOGI(TAG, "Set eye theme: %s", theme_name.c_str());
-                                   display->SetEyeTheme(theme_name);
-                               }
-                               return true;
-                           });
-    }
-#endif
 
 public:
     CompactWifiBoardLCD() : boot_button_(BOOT_BUTTON_GPIO), audio_codec(CODEC_RX_GPIO, CODEC_TX_GPIO)
@@ -385,8 +324,6 @@ public:
         InitializeGc9a01DisplayEye1();
         // 初始化按钮
         InitializeButtons();
-        // 初始化物联网
-        InitializeIot();
 
         // 设置SLEEP_GOIO引脚为上拉输入模式
         gpio_set_pull_mode(SLEEP_GOIO, GPIO_PULLUP_ONLY);
@@ -409,9 +346,6 @@ public:
             } });
         audio_codec.SetOutputVolume(100);
 
-#if CONFIG_USE_AVI_ANIM_EYE
-        InitializeTools();
-#endif
     }
 
     virtual Led *GetLed() override

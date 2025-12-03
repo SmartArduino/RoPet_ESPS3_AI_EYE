@@ -1,10 +1,3 @@
-/*
- * @Description: 
- * @Author: cjs丶
- * @Date: 2025-06-11 09:29:39
- * @LastEditTime: 2025-07-16 17:01:43
- * @LastEditors: cjs丶
- */
 #ifndef _BOARD_CONFIG_H_
 #define _BOARD_CONFIG_H_
 
