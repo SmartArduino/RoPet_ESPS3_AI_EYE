@@ -170,7 +170,7 @@ private:
                                      DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X,
                                      DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY,
                                      {
-                                         .text_font = &ont_puhui_20_4,
+                                         .text_font = &font_puhui_20_4,
                                          .icon_font = &font_awesome_20_4,
                                          .emoji_font = font_emoji_64_init(),
                                      });

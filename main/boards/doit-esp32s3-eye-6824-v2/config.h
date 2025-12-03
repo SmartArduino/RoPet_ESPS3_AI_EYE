@@ -2,7 +2,6 @@
 #ifndef _BOARD_CONFIG_H_
 #define _BOARD_CONFIG_H_
 
-#include <driver/gpio.h>
 
 /*=====================SC7A20H三轴加速度=====================*/
 #define SC7A20H_I2C_SDA GPIO_NUM_1
@@ -23,11 +22,6 @@
 /*=============================================================*/
 
 #define TEMP_EN GPIO_NUM_39 // 舵机
-
-/* ==================4G======================== */
-#define ML307_TX_PIN GPIO_NUM_16
-#define ML307_RX_PIN GPIO_NUM_17
-/*===============================================*/
 
 #if CONFIG_LCD_ST77916_360X360
 /*================================QSPI========================*/
@@ -94,7 +88,11 @@
 #define DISPLAY_OFFSET_X 0
 #define DISPLAY_OFFSET_Y 0
 
+#if CONFIG_LCD_GC9A01_240X240
+#define DISPLAY_RGB_ORDER LCD_RGB_ELEMENT_ORDER_BGR
+#else
 #define DISPLAY_RGB_ORDER LCD_RGB_ELEMENT_ORDER_RGB
+#endif
 
 #if CONFIG_LCD_ST7796_240X240 || CONFIG_LCD_GC9A01_240X240
 #define DISPLAY_COLOR_INVERT true
