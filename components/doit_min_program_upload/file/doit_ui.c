@@ -2,7 +2,6 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "esp_log.h"
 
 #include "esp_lvgl_port.h"
 #include "lvgl.h"
@@ -60,7 +59,7 @@ static void tip_timer_cb(lv_timer_t *t)
 static void ui_tip_show(const char *txt)
 {
     lvgl_port_lock(-1);
-    ESP_LOGI(TAG, "Creating tip bar");
+    MP_LOGI("Creating tip bar");
     if (s_lv_tip_card)
         return; /* 防止重复创建 */
 
@@ -68,7 +67,7 @@ static void ui_tip_show(const char *txt)
     s_lv_new_screen = lv_obj_create(NULL);
     if (!s_lv_new_screen)
     {
-        ESP_LOGW(TAG, "LVGL not ready, skip tip overlay");
+        MP_LOGW("LVGL not ready, skip tip overlay");
         return;
     }
 
@@ -106,14 +105,14 @@ static void ui_tip_show(const char *txt)
 static void ui_progress_create(void)
 {
     lvgl_port_lock(-1);
-    ESP_LOGI(TAG, "Creating progress bar");
+    MP_LOGI("Creating progress bar");
     if (s_lv_progress)
         return; /* 避免重复创建 */
 
     s_lv_new_screen = lv_obj_create(NULL); /* 可能为 NULL */
     if (!s_lv_new_screen)
     {
-        ESP_LOGW(TAG, "LVGL not ready, skip progress overlay");
+        MP_LOGW("LVGL not ready, skip progress overlay");
         return;
     }
     /* 1. 全屏容器 */
@@ -210,7 +209,7 @@ static void ui_go_on_show(void)
     // lv_scr_load(s_replacement_screen);
     // lv_refr_now(NULL);
 
-    ESP_LOGI(TAG, "Creating tip bar");
+    MP_LOGI("Creating tip bar");
     if (s_lv_tip_card)
         return; /* 防止重复创建 */
 
@@ -218,7 +217,7 @@ static void ui_go_on_show(void)
     s_lv_new_screen = lv_obj_create(NULL);
     if (!s_lv_new_screen)
     {
-        ESP_LOGW(TAG, "LVGL not ready, skip tip overlay");
+        MP_LOGW("LVGL not ready, skip tip overlay");
         return;
     }
 
@@ -302,7 +301,7 @@ static void lvgl_progress_task(void *arg)
                 lv_refr_now(NULL);
                 lvgl_port_unlock();
 
-                ESP_LOGI(TAG, "Download progress: %d%%", percent);
+                MP_LOGI("Download progress: %d%%", percent);
 
                 if (percent == 100)
                 {
@@ -367,7 +366,7 @@ bool download_progress_create(void)
     progress_queue = xQueueCreate(5, sizeof(uint8_t));
     if (!progress_queue)
     {
-        ESP_LOGE(TAG, "Failed to create progress queue");
+        MP_LOGE("Failed to create progress queue");
         return false;
     }
 
@@ -380,7 +379,7 @@ bool download_progress_create(void)
                       5,
                       &lvgl_progress_task_handle))
     {
-        ESP_LOGE(TAG, "Failed to create lvgl_progress_task");
+        MP_LOGE("Failed to create lvgl_progress_task");
         return false;
     }
     return true;
@@ -391,7 +390,7 @@ void download_progress_update(uint8_t percent)
 
     if (progress_queue)
     {
-        ESP_LOGI(TAG, "HTTP PSD progress: %d", percent);
+        MP_LOGI("HTTP PSD progress: %d", percent);
         progress_percent = percent;
         xQueueSend(progress_queue, &progress_percent, 0);
     }
@@ -410,7 +409,7 @@ void download_fail_show_toast(void)
     s_tip_done_sem = xSemaphoreCreateBinary();
     if (!s_tip_done_sem)
     {
-        ESP_LOGE(TAG, "Failed to create tip done semaphore");
+        MP_LOGE("Failed to create tip done semaphore");
         return;
     }
     ui_tip_show(HTTP_DOWNLOAD_TIP);
@@ -420,7 +419,7 @@ void download_fail_show_toast(void)
         xSemaphoreTake(s_tip_done_sem, portMAX_DELAY) == pdTRUE)
     {
 
-        ESP_LOGI(TAG, "Tip display finished, safe to return");
+        MP_LOGI("Tip display finished, safe to return");
         vSemaphoreDelete(s_tip_done_sem); // ✅ 用完即删
         s_tip_done_sem = NULL;
     }

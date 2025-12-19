@@ -35,7 +35,7 @@ static lv_img_dsc_t doit_file_img_dsc_ = {0}; // 用于显示的图片
 jpeg_error_t doit_img_decode(const char *dir_name)
 {
 
-    ESP_LOGI(TAG, "doit_img_decode: %s", dir_name);
+    MP_LOGI("doit_img_decode: %s", dir_name);
     uint8_t *out_buf = NULL;
     jpeg_error_t ret = JPEG_ERR_OK;
 
@@ -52,7 +52,7 @@ jpeg_error_t doit_img_decode(const char *dir_name)
     FILE *f = fopen(full_path, "rb");
     if (!f)
     {
-        ESP_LOGE(TAG, "fopen fail");
+        MP_LOGE("fopen fail");
         ret = JPEG_ERR_FAIL;
         goto jpeg_dec_failed;
     }
@@ -64,10 +64,10 @@ jpeg_error_t doit_img_decode(const char *dir_name)
     fread(jpg_buf, 1, jpg_len, f);
     fclose(f);
 
-    ESP_LOGI(TAG, "file size = %d", jpg_len);
+    MP_LOGI("file size = %d", jpg_len);
     if (jpg_len < 2)
         goto jpeg_dec_failed;
-    ESP_LOG_BUFFER_HEX(TAG, jpg_buf, 16); // 看前 16 字节
+    ESP_LOG_BUFFER_HEX(TAG,jpg_buf, 16); // 看前 16 字节
 
     // 为I/O 控制结构体设置图片数据
     jpeg_io.inbuf = jpg_buf;
@@ -114,7 +114,7 @@ jpeg_error_t doit_img_decode(const char *dir_name)
         goto jpeg_dec_failed;
     }
 
-    ESP_LOGI(TAG, "img decode success %dx%d  %lu bytes", out_info.width, out_info.height, pix_len);
+    MP_LOGI("img decode success %dx%d  %lu bytes", out_info.width, out_info.height, pix_len);
     doit_file_img_dsc_.header.cf = LV_COLOR_FORMAT_RGB565;
     doit_file_img_dsc_.header.w = out_info.width;
     doit_file_img_dsc_.header.h = out_info.height;
@@ -220,7 +220,7 @@ jpeg_dec_failed:
 //         goto jpeg_dec_failed;
 //     }
 
-//     ESP_LOGI(TAG, "img decode success %dx%d  %lu bytes", out_info.width, out_info.height, pix_len);
+//     MP_LOGI("img decode success %dx%d  %lu bytes", out_info.width, out_info.height, pix_len);
 //     doit_file_img_dsc_.header.cf = LV_COLOR_FORMAT_RGB565;
 //     doit_file_img_dsc_.header.w = out_info.width;
 //     doit_file_img_dsc_.header.h = out_info.height;
@@ -232,7 +232,7 @@ jpeg_dec_failed:
 //     lv_obj_invalidate(img_obj);
 //     lvgl_port_unlock();
 
-//     // ESP_LOG_BUFFER_HEX(TAG, out_buf, pix_len);
+//     // MP_LOG_BUFFER_HEX(out_buf, pix_len);
 
 //     jpeg_dec_close(jpeg_dec);
 //     if (jpeg_io)

@@ -64,7 +64,7 @@ static char *detect_file_type_from_fs(void)
     FILE *f = fopen(full_path, "rb");
     if (!f)
     {
-        ESP_LOGE(TAG, "fopen fail");
+        MP_LOGE("fopen fail");
     }
     size_t len = fread(head, 1, sizeof(head), f);
     fclose(f);
@@ -75,44 +75,44 @@ static char *detect_file_type_from_fs(void)
         FileHeader *fh = (FileHeader *)head;
         if (fh->magic == 0xAABBCCDD)
         {
-            ESP_LOGI(TAG, "detech file type: vpg");
+            MP_LOGI("detech file type: vpg");
             return "vpg";
         }
     }
 
     if (len >= 3 && head[0] == 0xFF && head[1] == 0xD8 && head[2] == 0xFF) /* JPEG */
     {
-        ESP_LOGI(TAG, "detech file type: jpg");
+        MP_LOGI("detech file type: jpg");
         return "jpg";
     }
 
     if (len >= 4 && memcmp(head, "\x89PNG", 4) == 0) /* PNG */
     {
-        ESP_LOGI(TAG, "detech file type: png");
+        MP_LOGI("detech file type: png");
         return "png";
     }
 
     if (len >= 6 && (memcmp(head, "GIF89a", 6) == 0 || memcmp(head, "GIF87a", 6) == 0)) /* GIF */
     {
-        ESP_LOGI(TAG, "detech file type: gif");
+        MP_LOGI("detech file type: gif");
         return "gif";
     }
 
     if (len >= 12 && memcmp(head + 4, "ftyp", 4) == 0) /* MP4 / ISO BMFF：ftyp 在 offset 4 */
     {
-        ESP_LOGI(TAG, "detech file type:mp4");
+        MP_LOGI("detech file type:mp4");
         return "mp4";
     }
 
     if (len >= 2 && head[0] == 'B' && head[1] == 'M') /* BMP */
     {
-        ESP_LOGI(TAG, "detech file type:bmp");
+        MP_LOGI("detech file type:bmp");
         return "bmp";
     }
 
     if (len >= 12 && memcmp(head + 8, "WEBP", 4) == 0) /* WEBP */
     {
-        ESP_LOGI(TAG, "detech file type:webp");
+        MP_LOGI("detech file type:webp");
         return "webp";
     }
 
@@ -125,23 +125,23 @@ void doit_file_init(lv_obj_t *psd_obj_, uint16_t width, uint16_t height)
     esp_err_t err = nvs_flash_init();
     if (err == ESP_OK)
     {
-        ESP_LOGD(TAG, "NVS initialized by component");
+        MP_LOGD("NVS initialized by component");
     }
 
     err = esp_netif_init();
     if (err == ESP_OK)
     {
-        ESP_LOGD(TAG, "TCP/IP adapter initialized by component");
+        MP_LOGD("TCP/IP adapter initialized by component");
     }
     if (err == ESP_ERR_INVALID_STATE)
     {
-        ESP_LOGD(TAG, "TCP/IP adapter already initialized by user");
+        MP_LOGD("TCP/IP adapter already initialized by user");
         return;
     }
     ESP_ERROR_CHECK(err);
 
     // 挂载文件系统spifss
-    ESP_LOGI(TAG, "Initializing LITTLEFS...");
+    MP_LOGI("Initializing LITTLEFS...");
     esp_vfs_littlefs_conf_t conf = {
         .base_path = "/littlefs",
         .partition_label = "storage",
@@ -157,15 +157,15 @@ void doit_file_init(lv_obj_t *psd_obj_, uint16_t width, uint16_t height)
     {
         if (ret == ESP_FAIL)
         {
-            ESP_LOGE(TAG, "Failed to mount or format filesystem");
+            MP_LOGE("Failed to mount or format filesystem");
         }
         else if (ret == ESP_ERR_NOT_FOUND)
         {
-            ESP_LOGE(TAG, "Failed to find LittleFS partition");
+            MP_LOGE("Failed to find LittleFS partition");
         }
         else
         {
-            ESP_LOGE(TAG, "Failed to initialize LittleFS (%s)", esp_err_to_name(ret));
+            MP_LOGE("Failed to initialize LittleFS (%s)", esp_err_to_name(ret));
         }
         return;
     }
@@ -174,12 +174,12 @@ void doit_file_init(lv_obj_t *psd_obj_, uint16_t width, uint16_t height)
     ret = esp_littlefs_info(conf.partition_label, &total, &used);
     if (ret != ESP_OK)
     {
-        ESP_LOGE(TAG, "Failed to get LittleFS partition information (%s)", esp_err_to_name(ret));
+        MP_LOGE("Failed to get LittleFS partition information (%s)", esp_err_to_name(ret));
         esp_littlefs_format(conf.partition_label);
     }
     else
     {
-        ESP_LOGI(TAG, "Partition size: total: %d, used: %d", total, used);
+        MP_LOGI("Partition size: total: %d, used: %d", total, used);
     }
 
     DIR *dir = opendir("/littlefs");
@@ -188,18 +188,18 @@ void doit_file_init(lv_obj_t *psd_obj_, uint16_t width, uint16_t height)
         struct dirent *entry;
         while ((entry = readdir(dir)) != NULL)
         {
-            ESP_LOGI(TAG, "【目录项】%s", entry->d_name);
+            MP_LOGI("【目录项】%s", entry->d_name);
         }
         closedir(dir);
     }
     else
     {
-        ESP_LOGE(TAG, "【错误】无法打开 /littlefs 目录");
+        MP_LOGE("【错误】无法打开 /littlefs 目录");
     }
 
     // 初始化UI
     doit_ui_init(psd_obj_, width, height);
-    ESP_LOGI(TAG, "UI initialized with width: %d, height: %d", width, height);
+    MP_LOGI("UI initialized with width: %d, height: %d", width, height);
 
     // 初始化解码器
     doit_decode_init();
@@ -243,12 +243,12 @@ void doit_file_psd_multi_process(bool go_on)
     {
         // 切换到下一个文件目录
         s_psd_multi_index = (s_psd_multi_index % s_psd_multi_num) + 1;
-        ESP_LOGI(TAG, "切换到下一个素材,索引=%d", s_psd_multi_index);
+        MP_LOGI("切换到下一个素材,索引=%d", s_psd_multi_index);
         doit_file_decode();
     }
     else
     {
-        ESP_LOGI(TAG, "退出");
+        MP_LOGI("退出");
         esp_restart();
     }
 }
@@ -257,7 +257,7 @@ void doit_file_psd_set(uint8_t index)
 {
     // 切换到下一个文件目录
     s_psd_multi_index = index;
-    ESP_LOGI(TAG, "切换到下一个素材,索引=%d", s_psd_multi_index);
+    MP_LOGI("切换到下一个素材,索引=%d", s_psd_multi_index);
     doit_file_decode();
 }
 #endif

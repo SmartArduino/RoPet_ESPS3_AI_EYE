@@ -21,7 +21,7 @@ jpeg_error_t doit_decode_init(void)
     ret = jpeg_dec_open(&config, &jpeg_dec);
     if (ret != JPEG_ERR_OK)
     {
-        ESP_LOGE(TAG, "jpeg decoder open fail,ret = %d", ret);
+        MP_LOGE("jpeg decoder open fail,ret = %d", ret);
         return ret;
     }
 

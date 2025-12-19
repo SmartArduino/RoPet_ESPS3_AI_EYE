@@ -10,6 +10,7 @@ extern "C"
 #include "esp_jpeg_common.h"
 #include "esp_jpeg_dec.h"
 #include "lvgl.h"
+#include "log_conf.h"
 
 #pragma pack(push, 1) // 设置结构体为1字节对齐
     typedef struct
@@ -23,7 +24,9 @@ extern "C"
         uint32_t magic;   // 4 bytes offset
         uint32_t size;    // 2 bytes size
         uint32_t itemNum; // 2 bytes size
-        uint32_t fps;     // 2 bytes size
+        uint32_t fps:8;     // 2 bytes size     //补丁
+        uint32_t height:12;  // 2 bytes size    //补丁，没用上，只用来对其字节
+        uint32_t width:12;  // 2 bytes size     //补丁，没用上，只用来对其字节
     } FileHeader;
 #pragma pack(pop) // 恢复对齐方式
 

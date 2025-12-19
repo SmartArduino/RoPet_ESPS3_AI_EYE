@@ -21,16 +21,7 @@ static int char_rx_access(uint16_t conn_handle, uint16_t attr_handle,
 static int char_tx_access(uint16_t conn_handle, uint16_t attr_handle,
                           struct ble_gatt_access_ctxt *ctxt, void *arg);
 
-/* Service */
-static const ble_uuid128_t svc_uuid =
-    BLE_UUID128_INIT(0x9e, 0xca, 0xdc, 0x24, 0x0e, 0xe5, 0xa9, 0xe0,
-                     0x93, 0xf3, 0xa3, 0xb5, 0x01, 0x00, 0x40, 0x6e);
-static const ble_uuid128_t char_rx_uuid = // 手机→设备
-    BLE_UUID128_INIT(0x9e, 0xca, 0xdc, 0x24, 0x0e, 0xe5, 0xa9, 0xe0,
-                     0x93, 0xf3, 0xa3, 0xb5, 0x02, 0x00, 0x40, 0x6e);
-static const ble_uuid128_t char_tx_uuid = // 设备→手机（notify）
-    BLE_UUID128_INIT(0x9e, 0xca, 0xdc, 0x24, 0x0e, 0xe5, 0xa9, 0xe0,
-                     0x93, 0xf3, 0xa3, 0xb5, 0x03, 0x00, 0x40, 0x6e);
+                     
 static uint16_t g_conn_handle = BLE_HS_CONN_HANDLE_NONE; // 当前连接句柄
 static uint16_t rx_val_handle;                           // 手机→设备
 static uint16_t tx_val_handle;                           // 设备→手机（notify）
@@ -70,7 +61,7 @@ static const struct ble_gatt_svc_def gatt_svr_svcs[] = {
                  .val_handle = &rx_val_handle},
                 {.uuid = &char_tx_uuid.u,
                  .access_cb = char_tx_access,
-                 .flags = BLE_GATT_CHR_F_NOTIFY | BLE_GATT_CHR_F_READ, // 支持通知和读取
+                 .flags = BLE_GATT_CHR_F_NOTIFY, // 支持通知和读取
                  .val_handle = &tx_val_handle},
 
                 {0}},
@@ -95,12 +86,12 @@ static int char_rx_access(uint16_t conn_handle, uint16_t attr_handle,
         /* Verify connection handle */
         if (conn_handle != BLE_HS_CONN_HANDLE_NONE)
         {
-            ESP_LOGI(TAG, "characteristic write; conn_handle=%d attr_handle=%d",
+            MP_LOGI( "characteristic write; conn_handle=%d attr_handle=%d",
                      conn_handle, attr_handle);
         }
         else
         {
-            ESP_LOGI(TAG,
+            MP_LOGI(
                      "characteristic write by nimble stack; attr_handle=%d",
                      attr_handle);
         }
@@ -123,7 +114,7 @@ static int char_rx_access(uint16_t conn_handle, uint16_t attr_handle,
                 os_mbuf_copydata(ctxt->om, 0, seg_len, line);
                 line[seg_len] = '\0';
 
-                ESP_LOGI(TAG, "received data: %s", line);
+                MP_LOGI( "received data: %s", line);
 
                 xQueueSend(ble_json_queue, line, 0);
                 return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
@@ -141,7 +132,7 @@ static int char_rx_access(uint16_t conn_handle, uint16_t attr_handle,
         goto error;
     }
 error:
-    ESP_LOGE(TAG,
+    MP_LOGE(
              "unexpected access operation to led characteristic, opcode: %d",
              ctxt->op);
     return BLE_ATT_ERR_UNLIKELY;
@@ -182,14 +173,14 @@ void gatt_svr_register_cb(struct ble_gatt_register_ctxt *ctxt, void *arg)
 
     /* Service register event */
     case BLE_GATT_REGISTER_OP_SVC:
-        ESP_LOGD(TAG, "registered service %s with handle=%d",
+        MP_LOGD( "registered service %s with handle=%d",
                  ble_uuid_to_str(ctxt->svc.svc_def->uuid, buf),
                  ctxt->svc.handle);
         break;
 
     /* Characteristic register event */
     case BLE_GATT_REGISTER_OP_CHR:
-        ESP_LOGD(TAG,
+        MP_LOGD(
                  "registering characteristic %s with "
                  "def_handle=%d val_handle=%d",
                  ble_uuid_to_str(ctxt->chr.chr_def->uuid, buf),
@@ -198,7 +189,7 @@ void gatt_svr_register_cb(struct ble_gatt_register_ctxt *ctxt, void *arg)
 
     /* Descriptor register event */
     case BLE_GATT_REGISTER_OP_DSC:
-        ESP_LOGD(TAG, "registering descriptor %s with handle=%d",
+        MP_LOGD( "registering descriptor %s with handle=%d",
                  ble_uuid_to_str(ctxt->dsc.dsc_def->uuid, buf),
                  ctxt->dsc.handle);
         break;
@@ -220,12 +211,12 @@ void gatt_svr_subscribe_cb(struct ble_gap_event *event)
     /* Check connection handle */
     if (event->subscribe.conn_handle != BLE_HS_CONN_HANDLE_NONE)
     {
-        ESP_LOGI(TAG, "subscribe event; conn_handle=%d attr_handle=%d",
+        MP_LOGI( "subscribe event; conn_handle=%d attr_handle=%d",
                  event->subscribe.conn_handle, event->subscribe.attr_handle);
     }
     else
     {
-        ESP_LOGI(TAG, "subscribe by nimble stack; attr_handle=%d",
+        MP_LOGI( "subscribe by nimble stack; attr_handle=%d",
                  event->subscribe.attr_handle);
     }
 
@@ -235,7 +226,7 @@ void gatt_svr_subscribe_cb(struct ble_gap_event *event)
         tx_chr_conn_handle_inited = true;
         tx_noti_status = event->subscribe.cur_notify;
 
-        ESP_LOGI(TAG, "Phone subscribed to notify, send resolution ratio...");
+        MP_LOGI( "Phone subscribed to notify, send resolution ratio...");
 // 传入连接句柄，确保数据发送到当前订阅的手机
 #if CONFIG_LCD_ST77916_360X360
         // ble_bin_notify_to_conn(&event->subscribe.conn_handle, ratio_360, sizeof(ratio_360));
@@ -308,17 +299,17 @@ int ble_json_notify(const char *txt)
     struct os_mbuf *om = ble_hs_mbuf_from_flat(txt_with_newline, strlen(txt_with_newline));
     if (!om)
     {
-        ESP_LOGE(TAG, "no mbuf");
+        MP_LOGE( "no mbuf");
         return BLE_HS_EAPP;
     }
     int rc = ble_gatts_notify_custom(tx_chr_conn_handle, tx_val_handle, om);
     if (rc != 0)
     {
-        ESP_LOGE(TAG, "notify fail %d", rc);
+        MP_LOGE( "notify fail %d", rc);
         os_mbuf_free_chain(om); // 只有失败时才释放
     }
     free(txt_with_newline);
-    ESP_LOGI(TAG, "【ble_json_notify】tx indication sent %s", txt);
+    MP_LOGI( "【ble_json_notify】tx indication sent %s", txt);
     return rc;
 }
 
@@ -335,7 +326,7 @@ int ble_bin_notify(const uint8_t *data, size_t len)
     if (rc != 0)
         os_mbuf_free_chain(om);
     else
-        ESP_LOGI(TAG, "bin notify %d bytes", (int)len);
+        MP_LOGI( "bin notify %d bytes", (int)len);
     return rc;
 }
 
@@ -362,17 +353,17 @@ int ble_json_notify_to_conn(uint16_t *connect_handle, const char *txt)
     struct os_mbuf *om = ble_hs_mbuf_from_flat(txt_with_newline, strlen(txt_with_newline));
     if (!om)
     {
-        ESP_LOGE(TAG, "no mbuf");
+        MP_LOGE( "no mbuf");
         return BLE_HS_EAPP;
     }
     int rc = ble_gatts_notify_custom(*connect_handle, tx_val_handle, om);
     if (rc != 0)
     {
-        ESP_LOGE(TAG, "notify fail %d", rc);
+        MP_LOGE( "notify fail %d", rc);
         os_mbuf_free_chain(om); // 只有失败时才释放
     }
     free(txt_with_newline);
-    ESP_LOGI(TAG, "【ble_json_notify_to_conn】tx indication sent %s", om->om_data);
+    MP_LOGI( "【ble_json_notify_to_conn】tx indication sent %s", om->om_data);
     return rc;
 }
 
@@ -389,7 +380,7 @@ int ble_bin_notify_to_conn(uint16_t *connect_handle, const uint8_t *data, size_t
     if (rc != 0)
         os_mbuf_free_chain(om);
     else
-        ESP_LOGI(TAG, "bin notify to conn %d bytes", (int)len);
+        MP_LOGI( "bin notify to conn %d bytes", (int)len);
 
     return rc;
 }
@@ -399,7 +390,7 @@ void ble_json_rx(const char *line)
 {
     if (line)
     {
-        ESP_LOGI(TAG, "ble_json_rx: %s", line);
+        MP_LOGI( "ble_json_rx: %s", line);
     }
 
     // 根据搜到文件名，拼接http请求url

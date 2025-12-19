@@ -8,7 +8,6 @@
 #include <stdlib.h>
 #include <sys/param.h>
 #include <ctype.h>
-#include "esp_log.h"
 #include "nvs_flash.h"
 #include "esp_event.h"
 #include "esp_netif.h"
@@ -81,7 +80,7 @@ static volatile bool show_idle = false;   // 显示任务已让出资源
 static jpeg_error_t decode_jpg_from_mem(const uint8_t *jpg_data, const int jpg_len, lv_image_dsc_t *output_dsc)
 {
 
-    // ESP_LOGI(TAG, "decode open： %ld", (uint32_t)esp_timer_get_time());
+    // MP_LOGI( "decode open： %ld", (uint32_t)esp_timer_get_time());
     jpeg_error_t ret = JPEG_ERR_OK;
 
     // 分配到栈里，避免堆分配
@@ -121,9 +120,9 @@ static jpeg_error_t decode_jpg_from_mem(const uint8_t *jpg_data, const int jpg_l
     jpeg_io.outbuf = output_dsc->data;
     ret = jpeg_dec_process(jpeg_dec, &jpeg_io);
 
-    // ESP_LOGI(TAG, "img decode success %dx%d  %lu bytes", out_info.width, out_info.height, output_dsc->data_size);
+    // MP_LOGI( "img decode success %dx%d  %lu bytes", out_info.width, out_info.height, output_dsc->data_size);
 
-    // ESP_LOGI(TAG, "decode over： %ld", (uint32_t)esp_timer_get_time());
+    // MP_LOGI( "decode over： %ld", (uint32_t)esp_timer_get_time());
     return ret;
 }
 
@@ -145,7 +144,6 @@ static void vpg_show_task(void *pvParameters)
 
         if (xQueueReceive(jpg_decode_queue, &vpg_frame, pdMS_TO_TICKS(10)) == pdTRUE)
         {
-            // ESP_LOGI(TAG,"显示第%d索",vpg_frame.buf_idx);
             uint8_t idx = vpg_frame.buf_idx;
 
             lvgl_port_lock(-1);
@@ -157,12 +155,8 @@ static void vpg_show_task(void *pvParameters)
             if (last_idx >= 0)
             {
                 xSemaphoreGive(buf_free[last_idx]);
-                // ESP_LOGI(TAG,"第%d锁释放",last_idx);
             }
             last_idx = idx;
-
-            // vTaskDelay(pdMS_TO_TICKS(vpg_frame.duration_ms));
-            //   vTaskDelay(pdMS_TO_TICKS(1000 / (vpg->fileHeader.fps))); // 补正5fps，防止播放过慢
         }
     }
 }
@@ -187,11 +181,9 @@ static void vpg_decode_task(void *pvParameters)
 
         uint8_t idx = vpg->lv_buf_cur_idx;
         /* === 关键：等这块缓冲区被显示任务释放 === */
-
-        // ESP_LOGI(TAG,"等待decode第%d索",idx);
         xSemaphoreTake(buf_free[idx], portMAX_DELAY);
 
-        // ESP_LOGI(TAG, "===decode open===： %ld", (uint32_t)esp_timer_get_time());
+        // MP_LOGI( "===decode open===： %ld", (uint32_t)esp_timer_get_time());
         uint32_t cur_fr_offset = vpg->ItemHeader[vpg->cur_frame_idx].offset; // 当前帧偏移
         uint32_t cur_fr_size = vpg->ItemHeader[vpg->cur_frame_idx].size;     // 当前帧大小
 
@@ -201,21 +193,18 @@ static void vpg_decode_task(void *pvParameters)
         // const uint8_t *jpg_data = vpg->psram_data + cur_fr_offset;
         memset(vpg->psram_data, 0, vpg->psram_size);
         fread(vpg->psram_data, cur_fr_size, 1, vpg->fp);
-        // ESP_LOGI(TAG, "current frame %d", vpg->cur_frame_idx);
+        // MP_LOGI( "current frame %d", vpg->cur_frame_idx);
 
         /* 2.解码JPG数据 */
         if (JPEG_ERR_OK == decode_jpg_from_mem(vpg->psram_data, cur_fr_size, &vpg->lv_buf[idx]))
         {
             vpg_frame_t msg = {.buf_idx = idx};
-            if (xQueueSend(jpg_decode_queue, &msg, 0) != pdTRUE) {
-                // 队列满了 / 发送失败，一定要把当前 buffer 还回去
-                ESP_LOGW(TAG, "jpg_decode_queue full, drop frame %d (buf %d)", vpg->cur_frame_idx, idx);
-            }
+            xQueueSend(jpg_decode_queue, &msg, 0);
         }
         else
         {
             /* 解码失败，直接归还缓冲区 */
-            ESP_LOGE(TAG, "解码失败，跳过第 %d 帧", vpg->cur_frame_idx);
+            MP_LOGE( "解码失败，跳过第 %d 帧", vpg->cur_frame_idx);
             xSemaphoreGive(buf_free[idx]);
             continue;
         }
@@ -226,10 +215,9 @@ static void vpg_decode_task(void *pvParameters)
         vpg->lv_buf_cur_idx = (idx + 1) % VPG_BUFF_NUM;
         if (++vpg->cur_frame_idx >= vpg->fileHeader.itemNum)
             vpg->cur_frame_idx = 0; // 循环播放
-        // /* 指向下一个解码缓冲区 */
-        // vpg->lv_buf_cur_idx = (vpg->lv_buf_cur_idx + 1) % 2; // 0和1切换
-        // ESP_LOGI(TAG, "===decode over===： %ld", (uint32_t)esp_timer_get_time());
-        vTaskDelay(pdMS_TO_TICKS(1000 / (vpg->fileHeader.fps))); // 补正5fps，防止播放过慢
+        // MP_LOGI( "===decode over===： %ld", (uint32_t)esp_timer_get_time());
+        // MP_LOGI("vpg->fileHeader.fps=%lu",vpg->fileHeader.fps);
+         vTaskDelay(pdMS_TO_TICKS(1000 / (vpg->fileHeader.fps+5))); 
     }
 }
 
@@ -251,7 +239,7 @@ void doit_vpg_player_stop(void)
     }
     if ((!decode_idle || !show_idle))
     {
-        ESP_LOGW(TAG, "stop timeout, force suspend");
+        MP_LOGW( "stop timeout, force suspend");
     }
 
     if (s_vpg_decode_task)
@@ -268,11 +256,11 @@ void doit_vpg_player_stop(void)
     int ret = fclose(vpg->fp);
     if (ret != 0)
     {
-        ESP_LOGE(TAG, "fclose error");
+        MP_LOGE( "fclose error");
     }
-    vpg->fp = NULL;
+    vpg->fp = NULL; // 防止后续误用
 
-    ESP_LOGI(TAG, "VPG player stopped,Free PSRAM: %d,min free sram=%d", heap_caps_get_free_size(MALLOC_CAP_SPIRAM), heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM));
+    MP_LOGI( "VPG player stopped,Free PSRAM: %d,min free sram=%d", heap_caps_get_free_size(MALLOC_CAP_SPIRAM), heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM));
 }
 
 /**************************** CodeGeeX Inline Diff ****************************/
@@ -298,7 +286,7 @@ void doit_vpg_player_stop(void)
  */
 void doit_vpg_player_start(const char *dir_name)
 {
-    ESP_LOGI(TAG, "加载的动画文件是：%s", dir_name);
+    MP_LOGI( "加载的动画文件是：%s", dir_name);
     // if (vpg && vpg->is_vpg_player)
     // {
     //     doit_vpg_player_stop();
@@ -313,7 +301,7 @@ void doit_vpg_player_start(const char *dir_name)
             vpg = heap_caps_calloc(1, sizeof(lv_vpg_t), MALLOC_CAP_SPIRAM);
             if (!vpg)
             {
-                ESP_LOGE(TAG, "vpg malloc fail");
+                MP_LOGE( "vpg malloc fail");
                 return;
             }
 
@@ -331,7 +319,7 @@ void doit_vpg_player_start(const char *dir_name)
                                                                          MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
                 if (!vpg->lv_buf[i].data)
                 {
-                    ESP_LOGE(TAG, "PSRAM malloc failed for lv_buf[%d]", i);
+                    MP_LOGE( "PSRAM malloc failed for lv_buf[%d]", i);
                     return;
                 }
             }
@@ -346,26 +334,26 @@ void doit_vpg_player_start(const char *dir_name)
             /*4. 创建启动解码任务和显示任务 */
             BaseType_t ret = xTaskCreatePinnedToCore(vpg_show_task, "vpg_show_task", 1536, NULL, 6, &s_vpg_show_task, 1);
             if (ret != pdPASS)
-                ESP_LOGE(TAG, "show task create fail, ret=%d", ret);
+                MP_LOGE( "show task create fail, ret=%d", ret);
             else
             {
-                ESP_LOGI(TAG, "show task create ok, handle=%p", s_vpg_show_task);
+                MP_LOGI( "show task create ok, handle=%p", s_vpg_show_task);
                 vTaskSuspend(s_vpg_show_task); // 先挂起
             }
 
             ret = xTaskCreatePinnedToCore(vpg_decode_task, "vpg_decode_task", 1728, NULL, 6, &s_vpg_decode_task, 1);
             if (ret != pdPASS)
-                ESP_LOGE(TAG, "decode task create fail, ret=%d", ret);
+                MP_LOGE( "decode task create fail, ret=%d", ret);
             else
             {
-                ESP_LOGI(TAG, "decode task create ok, handle=%p", s_vpg_decode_task);
+                MP_LOGI( "decode task create ok, handle=%p", s_vpg_decode_task);
                 vTaskSuspend(s_vpg_decode_task); // 先挂起
             }
 
-            ESP_LOGI(TAG, "VPG player started,Free PSRAM: %d", heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM));
+            MP_LOGI( "VPG player started,Free PSRAM: %d", heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM));
 
             vpg_is_init = true;
-            ESP_LOGI(TAG, "VPG资源初始化完成");
+            MP_LOGI( "VPG资源初始化完成");
         }
     }
 
@@ -385,25 +373,25 @@ void doit_vpg_player_start(const char *dir_name)
     if (vpg->fp == NULL)
     {
         /* code */
-        ESP_LOGE(TAG, "文件读取失败");
-        ESP_LOGE(TAG, "fopen 失败: %s (errno=%d)", strerror(errno), errno);
+        MP_LOGE( "文件读取失败");
+        MP_LOGE( "fopen 失败: %s (errno=%d)", strerror(errno), errno);
         return;
     }
 
     fseek(vpg->fp, 0, SEEK_END);
     vpg->psram_size = ftell(vpg->fp);
     fseek(vpg->fp, 0, SEEK_SET);
-    ESP_LOGI(TAG, "【VPG】文件总大小=%lu 字节", vpg->psram_size);
+    MP_LOGI( "【VPG】文件总大小=%lu 字节", vpg->psram_size);
 
     // 读文件头
     if (fread(&vpg->fileHeader, sizeof(FileHeader), 1, vpg->fp) != 1)
     {
-        ESP_LOGE(TAG, "fileHeader read fail");
+        MP_LOGE( "fileHeader read fail");
         return;
     }
     if (vpg->fileHeader.magic != 0xAABBCCDD)
     {
-        ESP_LOGE(TAG, "【VPG】魔数错误，不是合法 VPG 文件");
+        MP_LOGE( "【VPG】魔数错误，不是合法 VPG 文件");
         return;
     }
 
@@ -412,12 +400,12 @@ void doit_vpg_player_start(const char *dir_name)
     vpg->ItemHeader = (ItemHeader *)heap_caps_malloc(idx_bytes, MALLOC_CAP_SPIRAM);
     if (!vpg->ItemHeader)
     {
-        ESP_LOGE(TAG, "vpg->ItemHeader heap_caps_malloc fail");
+        MP_LOGE( "vpg->ItemHeader heap_caps_malloc fail");
         return;
     }
     if (fread(vpg->ItemHeader, idx_bytes, 1, vpg->fp) != 1)
     {
-        ESP_LOGE(TAG, "vpg->ItemHeader read index fail");
+        MP_LOGE( "vpg->ItemHeader read index fail");
         return;
     }
 
@@ -429,7 +417,7 @@ void doit_vpg_player_start(const char *dir_name)
             max_frame_size = vpg->ItemHeader[i].size;
         }
     }
-    ESP_LOGI(TAG, "本次一帧最大的大小是=%lu", max_frame_size);
+    MP_LOGI( "本次一帧最大的大小是=%lu", max_frame_size);
 
     // 分配缓冲区
     vpg->psram_data = (uint8_t *)heap_caps_malloc(max_frame_size, MALLOC_CAP_SPIRAM);
@@ -442,8 +430,8 @@ void doit_vpg_player_start(const char *dir_name)
     // 调试日志
     // for (int i = 0; i < vpg->fileHeader.itemNum; ++i)
     // {
-    //     ESP_LOGI(TAG, "【VPG】第 %d 帧，大小=%lu 字节, 偏移=%lu", i, vpg->ItemHeader[i].size, vpg->ItemHeader[i].offset);
-    //     ESP_LOG_BUFFER_HEX("【VPG】", vpg->psram_data + vpg->ItemHeader[i].offset, 10);
+    //     MP_LOGI( "【VPG】第 %d 帧，大小=%lu 字节, 偏移=%lu", i, vpg->ItemHeader[i].size, vpg->ItemHeader[i].offset);
+    //     MP_LOG_BUFFER_HEX("【VPG】", vpg->psram_data + vpg->ItemHeader[i].offset, 10);
     // }
 
     return;

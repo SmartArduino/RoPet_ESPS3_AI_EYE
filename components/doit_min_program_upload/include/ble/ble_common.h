@@ -33,6 +33,8 @@
 
 #include "cJSON.h"
 
+#include "log_conf.h"
+
 /* Defines */
 #define TAG "NimBLE_GATT_Server"
 #define DEVICE_NAME "DOIT_PSD"

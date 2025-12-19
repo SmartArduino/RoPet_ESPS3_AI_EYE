@@ -73,16 +73,16 @@ esp_err_t http_event_handler(esp_http_client_event_t *evt)
     switch (evt->event_id)
     {
     case HTTP_EVENT_ERROR:
-        ESP_LOGI(TAG, "HTTP_EVENT_ERROR");
+        MP_LOGI("HTTP_EVENT_ERROR");
         break;
     case HTTP_EVENT_ON_CONNECTED:
-        ESP_LOGI(TAG, "HTTP_EVENT_ON_CONNECTED");
+        MP_LOGI("HTTP_EVENT_ON_CONNECTED");
         break;
     case HTTP_EVENT_HEADER_SENT:
-        ESP_LOGI(TAG, "HTTP_EVENT_HEADER_SENT");
+        MP_LOGI("HTTP_EVENT_HEADER_SENT");
         break;
     case HTTP_EVENT_ON_HEADER:
-        ESP_LOGI(TAG, "HTTP_EVENT_ON_HEADER, key=%s, value=%s", evt->header_key, evt->header_value);
+        MP_LOGI("HTTP_EVENT_ON_HEADER, key=%s, value=%s", evt->header_key, evt->header_value);
         if (strcasecmp(evt->header_key, "Content-Length") == 0)
         {
             uint32_t content_length = atol(evt->header_value);
@@ -91,7 +91,7 @@ esp_err_t http_event_handler(esp_http_client_event_t *evt)
         }
         break;
     case HTTP_EVENT_ON_DATA:
-        // ESP_LOGI(TAG, "HTTP_EVENT_ON_DATA, len=%d", evt->data_len);
+        // MP_LOGI("HTTP_EVENT_ON_DATA, len=%d", evt->data_len);
         uint8_t *data = (uint8_t *)evt->data; // 获取一个数据块
         uint32_t data_len = evt->data_len;    // 数据的长度
         uint32_t data_to_copy = data_len;     // 剩余需要保存的数据
@@ -115,7 +115,7 @@ esp_err_t http_event_handler(esp_http_client_event_t *evt)
             {
                 int wlen = fwrite(store->buf_in_ram, 1, HTTP_DOWNLOAD_CHUNK_BUFFER, store->file_handle);
 
-                ESP_LOGI(TAG, "fwrite=%d", wlen);
+                MP_LOGI("fwrite=%d", wlen);
 
                 // g_done += evt->data_len;
                 // if (g_total)
@@ -127,7 +127,7 @@ esp_err_t http_event_handler(esp_http_client_event_t *evt)
                 // if (wlen != HTTP_DOWNLOAD_CHUNK_BUFFER)
                 // {
                 //     vTaskDelay(pdMS_TO_TICKS(10));
-                //     ESP_LOGE(TAG, "fwrite=%d", wlen);
+                //     MP_LOGE("fwrite=%d", wlen);
                 // }
 
                 store->total_written += HTTP_DOWNLOAD_CHUNK_BUFFER;
@@ -144,18 +144,18 @@ esp_err_t http_event_handler(esp_http_client_event_t *evt)
                     }
                 }
 
-                ESP_LOGI(TAG, "数据写入，总计 %lu KB", store->total_written / 1024);
+                MP_LOGI("数据写入，总计 %lu KB", store->total_written / 1024);
             }
         }
         break;
     case HTTP_EVENT_ON_FINISH:
-        ESP_LOGI(TAG, "HTTP_EVENT_ON_FINISH");
+        MP_LOGI("HTTP_EVENT_ON_FINISH");
         if (store->already_in_buf > 0)
         {
             size_t wlen = fwrite(store->buf_in_ram, 1, store->already_in_buf, store->file_handle);
             if (wlen != store->already_in_buf)
             {
-                ESP_LOGE(TAG, "末尾 fwrite 失败 %d vs %lu", wlen, store->already_in_buf);
+                MP_LOGE("末尾 fwrite 失败 %d vs %lu", wlen, store->already_in_buf);
             }
             store->total_written += store->already_in_buf;
             store->already_in_buf = 0;
@@ -169,14 +169,14 @@ esp_err_t http_event_handler(esp_http_client_event_t *evt)
             download_progress_update(percent);
         }
 
-        ESP_LOGI(TAG, "[HTTP_EVENT_ON_FINISH] 文件写入完成，总计 %lu 字节 (%lu KB)",
+        MP_LOGI("[HTTP_EVENT_ON_FINISH] 文件写入完成，总计 %lu 字节 (%lu KB)",
                  store->total_written, store->total_written / 1024);
         break;
     case HTTP_EVENT_DISCONNECTED:
-        ESP_LOGI(TAG, "HTTP_EVENT_DISCONNECTED");
+        MP_LOGI("HTTP_EVENT_DISCONNECTED");
         break;
     case HTTP_EVENT_REDIRECT:
-        ESP_LOGI(TAG, "HTTP_EVENT_REDIRECT");
+        MP_LOGI("HTTP_EVENT_REDIRECT");
         break;
     }
 
@@ -232,12 +232,12 @@ static doit_file_result_t http_download_chunk(const char *file_url, const char *
         .keep_alive_enable = true,
     };
     // 阻塞下载直到服务器发完
-    ESP_LOGI(TAG, "HTTP chunk encoding request =>");
+    MP_LOGI("HTTP chunk encoding request =>");
     esp_http_client_handle_t client = esp_http_client_init(&config);
     esp_err_t err = esp_http_client_perform(client);
     if (err == ESP_OK)
     {
-        ESP_LOGI(TAG, "HTTP chunk encoding Status = %d, content_length = %" PRId64,
+        MP_LOGI("HTTP chunk encoding Status = %d, content_length = %" PRId64,
                  esp_http_client_get_status_code(client),
                  esp_http_client_get_content_length(client));
         ret.path = strdup(save.final_path); // 成功：把路径带回去
@@ -245,11 +245,11 @@ static doit_file_result_t http_download_chunk(const char *file_url, const char *
     }
     else
     {
-        ESP_LOGE(TAG, "Error perform http request %s", esp_err_to_name(err));
+        MP_LOGE("Error perform http request %s", esp_err_to_name(err));
     }
     esp_http_client_cleanup(client);
     /* ← 在这里加日志 */
-    ESP_LOGI(TAG, "[http_download_chunk] 文件写入完成，总计 %lu 字节 (%lu KB)",
+    MP_LOGI("[http_download_chunk] 文件写入完成，总计 %lu 字节 (%lu KB)",
              save.total_written, save.total_written / 1024);
     fclose(save.file_handle);
     heap_caps_free(save.buf_in_ram);
@@ -259,13 +259,13 @@ static doit_file_result_t http_download_chunk(const char *file_url, const char *
         struct dirent *entry;
         while ((entry = readdir(dir)) != NULL)
         {
-            ESP_LOGI(TAG, "【目录项】%s", entry->d_name);
+            MP_LOGI("【目录项】%s", entry->d_name);
         }
         closedir(dir);
     }
     else
     {
-        ESP_LOGE(TAG, "【错误】无法打开 /littlefs 目录");
+        MP_LOGE("【错误】无法打开 /littlefs 目录");
     }
 
     return ret;
@@ -289,37 +289,37 @@ static doit_file_result_t http_perform_as_stream_reader(const char *file_url)
 
     if ((err = esp_http_client_open(client, 0)) != ESP_OK)
     {
-        ESP_LOGE(TAG, "Failed to open HTTP connection: %s", esp_err_to_name(err));
+        MP_LOGE("Failed to open HTTP connection: %s", esp_err_to_name(err));
         ret.err_code = CL_OPERT_FAIL;
         return ret;
     }
 
     int content_length = esp_http_client_fetch_headers(client);
-    ESP_LOGI(TAG, "Content length = %d", content_length);
+    MP_LOGI("Content length = %d", content_length);
 
     // 1.先读取512个字节用于判断是什么文件类型
     char *probe = malloc(512);
     int probe_len = esp_http_client_read(client, probe, 512);
     if (probe_len <= 0)
     {
-        ESP_LOGE(TAG, "No data received");
+        MP_LOGE("No data received");
         ret.err_code = CL_OPERT_FAIL;
         return ret;
     }
 
     // 输出文件内容
-    ESP_LOGI(TAG, "probe_len = %d", probe_len);
-    ESP_LOG_BUFFER_HEX(TAG, probe, probe_len);
+    MP_LOGI("probe_len = %d", probe_len);
+    ESP_LOG_BUFFER_HEX(TAG,probe, probe_len);
 
     // 2.判断文件类型
     const char *ext = detect_file_type(probe, 512);
-    ESP_LOGI(TAG, "File type detected: %s", ext);
+    MP_LOGI("File type detected: %s", ext);
 
     // 3.获取文件名称
     char *file_name = get_file_name_in_url(file_url);
     // if (file_name)   //文件名相同，保证覆盖文件，如果改成大容量sd卡，开启if
     // {
-    //     ESP_LOGI(TAG, "file_name: %s\n", file_name);
+    //     MP_LOGI("file_name: %s\n", file_name);
     // }
     // else
     // {
@@ -330,7 +330,7 @@ static doit_file_result_t http_perform_as_stream_reader(const char *file_url)
     char *littlefs_path = malloc(64);
     if (!littlefs_path)
     {
-        ESP_LOGE(TAG, "malloc littlefs_path fail");
+        MP_LOGE("malloc littlefs_path fail");
         ret.err_code = CL_OPERT_FAIL;
         return ret;
     }
@@ -347,13 +347,13 @@ static doit_file_result_t http_perform_as_stream_reader(const char *file_url)
     //              "/littlefs/%s.%s", file_name, ext);
     // }
 
-    ESP_LOGI(TAG, "littlefs_path: %s\n", littlefs_path);
+    MP_LOGI("littlefs_path: %s\n", littlefs_path);
 
     // 4.把头文件写入
     FILE *fp = fopen(littlefs_path, "wb");
     if (!fp)
     {
-        ESP_LOGE(TAG, "Failed to create file %s", littlefs_path);
+        MP_LOGE("Failed to create file %s", littlefs_path);
         esp_http_client_close(client);
         esp_http_client_cleanup(client);
         ret.err_code = CL_OPERT_FAIL;
@@ -365,13 +365,13 @@ static doit_file_result_t http_perform_as_stream_reader(const char *file_url)
     char *buffer = (char *)heap_caps_malloc(HTTP_DOWNLOAD_STREAM_BUFFER + 1, MALLOC_CAP_SPIRAM);
     if (buffer == NULL)
     {
-        ESP_LOGE(TAG, "Cannot malloc http receive buffer");
+        MP_LOGE("Cannot malloc http receive buffer");
         ret.err_code = CL_OPERT_FAIL;
         return ret;
     }
 
     int read_len, total = probe_len;
-    ESP_LOGI(TAG, "total = %d,content_length = %d", total, content_length);
+    MP_LOGI("total = %d,content_length = %d", total, content_length);
     do // 不要依赖 Content-Length 控制循环。改成“读到没数据为止”的流式写入
     {
         read_len = esp_http_client_read(client, buffer, HTTP_DOWNLOAD_STREAM_BUFFER);
@@ -385,9 +385,9 @@ static doit_file_result_t http_perform_as_stream_reader(const char *file_url)
                 if (wlen != read_len)
                 {
                     vTaskDelay(pdMS_TO_TICKS(10));
-                    ESP_LOGE(TAG, "fwrite=%d", wlen);
+                    MP_LOGE("fwrite=%d", wlen);
                 }
-                ESP_LOGI(TAG, "数据写入，总计 %d KB", total / 1024);
+                MP_LOGI("数据写入，总计 %d KB", total / 1024);
 
             } while (wlen != read_len);
         }
@@ -405,7 +405,7 @@ static doit_file_result_t http_perform_as_stream_reader(const char *file_url)
     free(buffer);
     esp_http_client_close(client);
     esp_http_client_cleanup(client);
-    ESP_LOGI(TAG, "Download complete, written %d bytes -> %s", total, littlefs_path);
+    MP_LOGI("Download complete, written %d bytes -> %s", total, littlefs_path);
     ret.path = littlefs_path;
     return ret;
 }
@@ -414,7 +414,7 @@ static doit_file_result_t http_perform_as_stream_reader(const char *file_url)
 
 static bool is_http_file_content_length_overflow(const char *url)
 {
-    ESP_LOGI(TAG, "Checking file size for URL: %s", url);
+    MP_LOGI("Checking file size for URL: %s", url);
     bool ret = true;
 
     /* 1.获取文件长度 */
@@ -428,13 +428,13 @@ static bool is_http_file_content_length_overflow(const char *url)
     if (esp_http_client_perform(head) == ESP_OK)
     {
         s_content_len = esp_http_client_get_content_length(head);
-        ESP_LOGI(TAG, "File size: %lu bytes", s_content_len);
+        MP_LOGI("File size: %lu bytes", s_content_len);
     }
 
     /* 2.判断文件是否过大 */
     if (s_content_len > HTTP_DOWNLOAD_MAX_SIZE)
     {
-        ESP_LOGW(TAG, "File size exceeds limit of %d bytes,Skip download", HTTP_DOWNLOAD_MAX_SIZE);
+        MP_LOGW("File size exceeds limit of %d bytes,Skip download", HTTP_DOWNLOAD_MAX_SIZE);
         ret = true;
     }
     else
@@ -482,7 +482,7 @@ static char *get_file_name_in_url(const char *url)
 /* 返回静态字符串，URL 探测与 文件通用 */
 static const char *detect_file_type(const char *data, int len)
 {
-    ESP_LOGI(TAG, "Detecting file type...,len = %d", len);
+    MP_LOGI("Detecting file type...,len = %d", len);
     if (len < 4)
         return "bin"; // 太短无法判断
 
@@ -490,13 +490,13 @@ static const char *detect_file_type(const char *data, int len)
     FileHeader *fh = (FileHeader *)data;
     if (fh->magic == 0xAABBCCDD) // vng格式头
     {
-        ESP_LOGI(TAG, "VPG detected: size=%" PRIu32 " itemNum=%" PRIu32 " fps=%" PRIu32,
+        MP_LOGI("VPG detected: size=%" PRIu32 " itemNum=%" PRIu32 " fps=%" PRIu32,
                  fh->size, fh->itemNum, fh->fps);
         return "vpg";
     }
     else
     {
-        ESP_LOGI(TAG, "11VPG detected: size=%" PRIu32 " itemNum=%" PRIu32 " fps=%" PRIu32,
+        MP_LOGI("11VPG detected: size=%" PRIu32 " itemNum=%" PRIu32 " fps=%" PRIu32,
                  fh->size, fh->itemNum, fh->fps);
     }
 
@@ -534,7 +534,7 @@ static char *get_file_type_in_url(const char *url)
     char *dot = strrchr(url, '.');
     if (dot)
     {
-        ESP_LOGI(TAG, "get file type is %s in url %s", (dot + 1), url);
+        MP_LOGI("get file type is %s in url %s", (dot + 1), url);
         return strdup(dot + 1);
     }
     return "";
@@ -544,7 +544,7 @@ static char *get_file_type_in_url(const char *url)
 doit_file_result_t doit_file_download(const char *url, const char *dir_name)
 {
     doit_vpg_player_stop(); // 先停止当前播放的VPG视频
-    ESP_LOGI(TAG, "Downloading file from : %s", url);
+    MP_LOGI("Downloading file from : %s", url);
     doit_file_result_t ret = {.err_code = CL_OPRET_SUCCESS, .path = NULL};
 
     /* 1. 校验文件大小 */
@@ -570,7 +570,7 @@ doit_file_result_t doit_file_download(const char *url, const char *dir_name)
 #include "mbedtls/md5.h"
 void md5_test(void *buf, uint32_t len)
 {
-    ESP_LOGI(TAG, "MD5 加密示例\n");
+    MP_LOGI("MD5 加密示例\n");
 
     // 初始化 MD5 上下文
     mbedtls_md5_context md5_ctx;
@@ -581,7 +581,7 @@ void md5_test(void *buf, uint32_t len)
     mbedtls_md5_update(&md5_ctx, buf, len); // 更新输入数据
     mbedtls_md5_finish(&md5_ctx, output);   // 完成计算并获取结果
 
-    ESP_LOGI(TAG, "MD5 加密后 (32位): ");
+    MP_LOGI("MD5 加密后 (32位): ");
     for (int i = 0; i < 16; i++)
     {
         printf("%02x", output[i]); // 输出为十六进制格式

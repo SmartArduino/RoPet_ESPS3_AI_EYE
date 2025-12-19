@@ -34,7 +34,7 @@ static doit_ble_ready_cb_t ble_ready_cb = NULL;
 static void on_stack_reset(int reason)
 {
     /* On reset, print reset reason to console */
-    ESP_LOGI(TAG, "nimble stack reset, reset reason: %d", reason);
+    MP_LOGI( "nimble stack reset, reset reason: %d", reason);
 }
 
 static void on_stack_sync(void)
@@ -58,7 +58,7 @@ static void nimble_host_config_init(void)
 static void nimble_host_task(void *param)
 {
     /* Task entry log */
-    ESP_LOGI(TAG, "nimble host task has been started!");
+    MP_LOGI( "nimble host task has been started!");
 
     /* This function won't return until nimble_port_stop() is executed */
     nimble_port_run();
@@ -101,7 +101,7 @@ void min_program_ble_start(void)
     }
     if (ret != ESP_OK)
     {
-        ESP_LOGE(TAG, "failed to initialize nvs flash, error code: %d ", ret);
+        MP_LOGE( "failed to initialize nvs flash, error code: %d ", ret);
         return;
     }
 
@@ -109,7 +109,7 @@ void min_program_ble_start(void)
     ret = nimble_port_init();
     if (ret != ESP_OK)
     {
-        ESP_LOGE(TAG, "failed to initialize nimble stack, error code: %d ",
+        MP_LOGE( "failed to initialize nimble stack, error code: %d ",
                  ret);
         return;
     }
@@ -118,7 +118,7 @@ void min_program_ble_start(void)
     rc = gap_init();
     if (rc != 0)
     {
-        ESP_LOGE(TAG, "failed to initialize GAP service, error code: %d", rc);
+        MP_LOGE( "failed to initialize GAP service, error code: %d", rc);
         return;
     }
 
@@ -126,7 +126,7 @@ void min_program_ble_start(void)
     rc = gatt_svc_init();
     if (rc != 0)
     {
-        ESP_LOGE(TAG, "failed to initialize GATT server, error code: %d", rc);
+        MP_LOGE( "failed to initialize GATT server, error code: %d", rc);
         return;
     }
 
@@ -186,5 +186,5 @@ void min_program_ble_stop(void)
     // /* 7. 反初始化HCI */
     // esp_nimble_hci_deinit();
 
-    ESP_LOGI(TAG, "NimBLE completely stopped");
+    MP_LOGI( "NimBLE completely stopped");
 }

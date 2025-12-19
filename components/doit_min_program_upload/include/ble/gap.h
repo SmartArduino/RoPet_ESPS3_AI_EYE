@@ -19,5 +19,4 @@
 /* Public function declarations */
 void adv_init(void);
 int gap_init(void);
-void start_advertising(void);
 #endif // GAP_SVC_H

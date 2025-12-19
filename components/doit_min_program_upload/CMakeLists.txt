@@ -17,6 +17,7 @@ list(APPEND srcs
 list(APPEND incs
         include/file
         include/ble
+        include
         )
 
 # littlefs 镜像的源目录
@@ -44,9 +45,7 @@ if(CONFIG_SUPPORT_MINI_PROGRAMS_REPLACE_PSD)
         endif()
 endif()
 
-
-
-idf_component_register(SRCS  ${srcs}
-                            INCLUDE_DIRS ${incs}
-                            EMBED_TXTFILES ${assets}
+idf_component_register(SRCS  "${srcs}"
+                            INCLUDE_DIRS "${incs}"
+                            EMBED_TXTFILES "${assets}"
                             REQUIRES driver esp_netif esp_event esp-tls esp_http_client spiffs nvs_flash espressif__esp_new_jpeg lvgl__lvgl espressif__esp_lvgl_port bt json)
