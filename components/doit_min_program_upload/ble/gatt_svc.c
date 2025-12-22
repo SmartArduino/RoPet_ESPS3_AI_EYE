@@ -14,6 +14,14 @@
 
 #define JSON_MAX_LEN 256
 
+#define BLE_RESP_FAIL "0100"
+#define BLE_RESP_OK "0101"
+#define BLE_RATIO_360 "0002"
+#define BLE_RATIO_240 "0001"
+#define BLE_RATIO_160 "0000"
+#define BLE_REC_PLATFORM_EYE "01"   //用户进入双目
+#define BLE_REC_PLATFORM_BADGE "02" //用户进入吧唧
+
 /* Private variables */
 /* Private function declarations */
 static int char_rx_access(uint16_t conn_handle, uint16_t attr_handle,
@@ -31,6 +39,9 @@ static bool tx_noti_status = false;
 
 static QueueHandle_t ble_json_queue = NULL; // BLE JSON数据队列
 
+
+static uint8_t platform_idx = 1; // 用户进入平台索引
+
 // /* 自定义蓝牙协议 */
 // #if CONFIG_LCD_ST77916_360X360
 // static const uint8_t ratio_360[] = {0x00, 0x02};
@@ -39,11 +50,7 @@ static QueueHandle_t ble_json_queue = NULL; // BLE JSON数据队列
 // #elif CONFIG_LCD_GC9A01_160X160
 // static const uint8_t ratio_160[] = {0x00, 0x00};
 // #endif
-#define BLE_RESP_FAIL "0100"
-#define BLE_RESP_OK "0101"
-#define BLE_RATIO_360 "0002"
-#define BLE_RATIO_240 "0001"
-#define BLE_RATIO_160 "0000"
+
 
 // static const uint8_t rsp_fail[] = {0x01, 0x00}; // 失败
 // static const uint8_t rsp_ok[] = {0x01, 0x01};   // 成功
@@ -228,15 +235,22 @@ void gatt_svr_subscribe_cb(struct ble_gap_event *event)
 
         MP_LOGI( "Phone subscribed to notify, send resolution ratio...");
 // 传入连接句柄，确保数据发送到当前订阅的手机
+int ret = 0;
 #if CONFIG_LCD_ST77916_360X360
         // ble_bin_notify_to_conn(&event->subscribe.conn_handle, ratio_360, sizeof(ratio_360));
-        ble_json_notify_to_conn(&event->subscribe.conn_handle, BLE_RATIO_360);
+        ret = ble_json_notify_to_conn(&event->subscribe.conn_handle, BLE_RATIO_360);
+        if (ret == 0)
+            MP_LOGI( ">>>【通知】:分辨率 360x360");
 #elif CONFIG_LCD_GC9A01_240X240 || CONFIG_LCD_ST7796_240X240
         // ble_bin_notify_to_conn(&event->subscribe.conn_handle, ratio_240, sizeof(ratio_240));
-        ble_json_notify_to_conn(&event->subscribe.conn_handle, BLE_RATIO_240);
+        ret = ble_json_notify_to_conn(&event->subscribe.conn_handle, BLE_RATIO_240);
+        if (ret == 0)
+            MP_LOGI( ">>>【通知】:分辨率 240x240");
 #elif CONFIG_LCD_GC9A01_160X160
         // ble_bin_notify_to_conn(&event->subscribe.conn_handle, ratio_160, sizeof(ratio_160));
-        ble_json_notify_to_conn(&event->subscribe.conn_handle, BLE_RATIO_160);
+        ret = ble_json_notify_to_conn(&event->subscribe.conn_handle, BLE_RATIO_160);
+        if (ret == 0)
+            MP_LOGI( ">>>【通知】:分辨率 160x160");
 #endif
     }
 }
@@ -393,20 +407,36 @@ void ble_json_rx(const char *line)
         MP_LOGI( "ble_json_rx: %s", line);
     }
 
-    // 根据搜到文件名，拼接http请求url
-    char url[256]; // 确保有足够的空间存储完整的URL
-    sprintf(url, "http://tui.doit.am/sucai/uploads/%s", line);
-    doit_file_result_t ret = doit_file_download(url, get_show_dir());
-    int rc;
-    if (ret.err_code != CL_OPRET_SUCCESS)
-    {
-        // 提示手机下载失败
-        ble_json_notify(BLE_RESP_FAIL);
+    if(strcmp(line,BLE_REC_PLATFORM_EYE)==0){
+        platform_idx = atoi(line);
+        MP_LOGI(">>>user choose platform double eye,platform=%d",platform_idx);
     }
-    // 下载完成，回复小程序，然后重启
-    ble_json_notify(BLE_RESP_OK);
-    doit_file_decode(); // 重新启动VPG视频播放
-    // esp_restart();
-    // min_program_ble_stop();
-    // min_program_ble_start();
+    else if(strcmp(line,BLE_REC_PLATFORM_BADGE)==0){
+         platform_idx = atoi(line);
+         MP_LOGI(">>>user choose platform badge,platform=%d",platform_idx);
+    }
+    else{
+        // 根据搜到文件名，拼接http请求url
+        char url[256]; // 确保有足够的空间存储完整的URL
+        if(platform_idx == 1)
+            sprintf(url, "http://tui.doit.am/sucai/uploads/%s", line);
+        else if(platform_idx == 2)
+            sprintf(url, "http://tui.doit.am/second_dimension/uploads/20%s", line);
+            
+        doit_file_result_t ret = doit_file_download(url, get_show_dir());
+        int rc;
+        if (ret.err_code != CL_OPRET_SUCCESS)
+        {
+            // 提示手机下载失败
+            if(ble_json_notify(BLE_RESP_FAIL)==0){
+                MP_LOGI( ">>>【通知】回复小程序:失败");
+            }
+        }else{
+            // 下载完成，回复小程序，然后重启
+            if(ble_json_notify(BLE_RESP_OK)==0){
+                MP_LOGI( ">>>【通知】回复小程序:成功");
+            }
+        }
+        doit_file_decode(); // 重新启动VPG视频播放
+    }
 }

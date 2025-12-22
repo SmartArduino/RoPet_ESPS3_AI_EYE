@@ -14,8 +14,6 @@
 #include <esp_netif.h>
 #include "esp_lvgl_port.h"
 
-static const char *TAG = "doit_file";
-
 #if CONFIG_USE_PSD_MULTIPLE
 static uint8_t s_psd_multi_num = CONFIG_USE_PSD_MULTIPLE_NUM;
 static uint8_t s_psd_multi_index = 1; // 多素材索引

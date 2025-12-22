@@ -31,18 +31,26 @@
 static const char *TAG = "file_download";
 
 /*==========================宏定义===================================*/
-#define HTTP_DOWNLOAD_CHUNK_BUFFER (128 * 1024) //  128K 字节
+#define HTTP_DOWNLOAD_CHUNK_BUFFER (256 * 1024) //  128K 字节
 #define HTTP_DOWNLOAD_STREAM_BUFFER 20480
-#define HTTP_DOWNLOAD_MAX_SIZE (8 * 1024 * 1024) // 最大下载文件8MB
+
+// #if CONFIG_USE_PSD_MULTIPLE
+    // #define HTTP_DOWNLOAD_MAX_SIZE ((7 * 1024 * 1024)/CONFIG_USE_PSD_MULTIPLE_NUM) // 最大可下载的文件大小每个槽位相同
+// #else
+    #define HTTP_DOWNLOAD_MAX_SIZE (7 * 1024 * 1024) // 最大下载文件7MB
+// #endif
+
 #define PROGRESS_UPDATE_THRESHOLD (128 * 1024)   // 进度更新阈值(128KB)
 
+#define FS_WRITE_CHUNK (128 * 1024)
 /*===================================================================*/
 
 static uint32_t s_content_len = 0; // 文件总长度
 
 typedef struct
 {
-    FILE *file_handle;       // 文件句柄
+    // FILE *file_handle;       // 文件句柄
+    uint8_t cur_sta;         // 当前状态,0:初始化,1:正在下载，2：下载完成，正在写入
     uint8_t *buf_in_ram;     // 攒写缓冲区（PSRAM）
     uint32_t already_in_buf; // 缓冲区里现在已多少字节
     char *final_path;        // 完整路径，回头要给主函数用
@@ -53,7 +61,6 @@ typedef struct
 /* =============静态函数声明===================*/
 static bool is_http_file_content_length_overflow(const char *url);
 static doit_file_result_t to_download(const char *url, const char *dir_name);
-static void switch_to_old_screen(void);
 static char *get_file_name_in_url(const char *url);
 static char *get_file_type_in_url(const char *url);
 static const char *detect_file_type(const char *data, int len);
@@ -88,92 +95,88 @@ esp_err_t http_event_handler(esp_http_client_event_t *evt)
             uint32_t content_length = atol(evt->header_value);
             store->file_total = content_length;
             last_update = 0;
+
+            //判断当前psram能否存下文件
+            MP_LOGI("psram可用大小=%d,psram可用的最大块=%d", heap_caps_get_free_size(MALLOC_CAP_SPIRAM),heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
+            if(content_length > 0 && heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM) > content_length)
+            {
+                store->buf_in_ram = (uint8_t *)heap_caps_malloc(content_length, MALLOC_CAP_SPIRAM);
+                MP_LOGI("缓冲区足够,分配缓冲区大小=%d",content_length);
+            }
+            
+
         }
         break;
     case HTTP_EVENT_ON_DATA:
         // MP_LOGI("HTTP_EVENT_ON_DATA, len=%d", evt->data_len);
-        uint8_t *data = (uint8_t *)evt->data; // 获取一个数据块
-        uint32_t data_len = evt->data_len;    // 数据的长度
-        uint32_t data_to_copy = data_len;     // 剩余需要保存的数据
-
-        // 开始存储数据
-        while (data_to_copy > 0)
+         if (!store->buf_in_ram || store->file_total == 0)
         {
-            // 当前缓冲区可以存放的字节数
-            uint32_t buf_can_save = HTTP_DOWNLOAD_CHUNK_BUFFER - store->already_in_buf;
-            uint32_t time_byte = data_to_copy < buf_can_save ? data_to_copy : buf_can_save; // 本次要拷贝的字节数
+            MP_LOGE("no PSRAM buffer or unknown file_total, abort");
+            return ESP_FAIL;
+        }
 
-            // 拷贝数据到缓冲区
-            memcpy(store->buf_in_ram + store->already_in_buf, data, time_byte);
+        store->cur_sta = 1;
+        //  /* 直接写入全量缓冲区，直到收到完 file_total 字节 */
+        memcpy(store->buf_in_ram + store->already_in_buf, evt->data, evt->data_len);
+        store->already_in_buf += evt->data_len;
+        // MP_LOGI("Download  %lu Bytes...",store->already_in_buf);
+        uint8_t percent = (store->already_in_buf * 100) / store->file_total; // 最大 99,留1给文件写入
+        // if (percent > 99) percent = 99;
 
-            store->already_in_buf += time_byte;
-            data += time_byte;
-            data_to_copy -= time_byte;
-
-            // 如果缓冲区满了，写入文件
-            if (store->already_in_buf == HTTP_DOWNLOAD_CHUNK_BUFFER)
-            {
-                int wlen = fwrite(store->buf_in_ram, 1, HTTP_DOWNLOAD_CHUNK_BUFFER, store->file_handle);
-
-                MP_LOGI("fwrite=%d", wlen);
-
-                // g_done += evt->data_len;
-                // if (g_total)
-                // {
-                //     uint8_t percent = (g_done * 100) / g_total;
-                //     ui_overlay_set_progress(percent);
-                // }
-                // int wlen = fwrite(store->buf_in_ram, 1, HTTP_DOWNLOAD_CHUNK_BUFFER, store->file_handle);
-                // if (wlen != HTTP_DOWNLOAD_CHUNK_BUFFER)
-                // {
-                //     vTaskDelay(pdMS_TO_TICKS(10));
-                //     MP_LOGE("fwrite=%d", wlen);
-                // }
-
-                store->total_written += HTTP_DOWNLOAD_CHUNK_BUFFER;
-                store->already_in_buf = 0;
-
-                // 进度更新：如果文件总大小已知，则计算百分比并发送到队列
-                if (store->file_total > 0)
-                {
-                    if (store->total_written - last_update >= PROGRESS_UPDATE_THRESHOLD || store->total_written == store->file_total)
-                    {
-                        last_update = store->total_written;
-                        uint8_t percent = (store->total_written * 100) / store->file_total;
-                        download_progress_update(percent); // 更新下载进度
-                    }
-                }
-
-                MP_LOGI("数据写入，总计 %lu KB", store->total_written / 1024);
-            }
+        if (last_update != percent) {
+            //  MP_LOGI("Download  %lu Bytes...",store->already_in_buf);
+            download_progress_update(percent);
+            last_update = percent;
         }
         break;
     case HTTP_EVENT_ON_FINISH:
         MP_LOGI("HTTP_EVENT_ON_FINISH");
-        if (store->already_in_buf > 0)
+
+         // 如果下载完成，写入文件
+        if(store->already_in_buf == store->file_total)
         {
-            size_t wlen = fwrite(store->buf_in_ram, 1, store->already_in_buf, store->file_handle);
-            if (wlen != store->already_in_buf)
-            {
-                MP_LOGE("末尾 fwrite 失败 %d vs %lu", wlen, store->already_in_buf);
+            store->cur_sta = 2;
+            ESP_LOGI(TAG,"缓冲区已经写满，开始写入文件系统");
+            FILE *f = fopen(store->final_path, "wb"); // 打开文件，如果不存在则创建
+            store->total_written = 0;
+            uint8_t percent;
+            while (store->total_written < store->file_total) {
+                size_t pre_write_num = MIN(FS_WRITE_CHUNK, store->file_total - store->total_written);
+                size_t real_write = fwrite(store->buf_in_ram + store->total_written, 1, pre_write_num, f);
+                if (pre_write_num != real_write) {
+                    MP_LOGE("fwrite fail off=%u", store->total_written);
+                    fclose(f);
+                    break;
+                }
+                store->total_written += pre_write_num;
+                percent = (store->total_written * 100) / store->file_total;
+                download_progress_update_write(percent);
+                // MP_LOGI("》》》File writing: %d%% ,writen:%lu", percent,store->total_written);
             }
-            store->total_written += store->already_in_buf;
-            store->already_in_buf = 0;
+            fflush(f);
+            fclose(f);
+                /* ← 在这里加日志 */
+            MP_LOGI("文件写入完成，总计 %lu 字节 (%lu KB)",
+            store->total_written, store->total_written / 1024);
+            download_progress_done();
         }
-        fflush(store->file_handle); // 强制落盘
-
-        // 确保最终进度为100%
-        if (store->file_total > 0)
-        {
-            uint8_t percent = (store->total_written * 100) / store->file_total;
-            download_progress_update(percent);
-        }
-
-        MP_LOGI("[HTTP_EVENT_ON_FINISH] 文件写入完成，总计 %lu 字节 (%lu KB)",
-                 store->total_written, store->total_written / 1024);
+      
         break;
     case HTTP_EVENT_DISCONNECTED:
         MP_LOGI("HTTP_EVENT_DISCONNECTED");
+         int sock_err = esp_http_client_get_errno(evt->client); // errno，若无效返回 -1
+        int tls_err = 0, tls_flags = 0;
+        esp_http_client_get_and_clear_last_tls_error(evt->client, &tls_err, &tls_flags);
+        MP_LOGI("HTTP_EVENT_DISCONNECTED, errno=%d, tls_err=0x%x, tls_flags=0x%x",
+            sock_err, tls_err, tls_flags);
+        if(sock_err == 113 && tls_err == 0 && tls_flags == 0) {
+            MP_LOGE("下载失败，网络连接超时");
+            //回滚
+            MP_LOGI("cur_sta=%d",store->cur_sta);
+            if(store->cur_sta != 2)
+                download_progress_fail(UI_FAIL_NET_DISCONNECT);
+        }
+
         break;
     case HTTP_EVENT_REDIRECT:
         MP_LOGI("HTTP_EVENT_REDIRECT");
@@ -190,37 +193,21 @@ static doit_file_result_t http_download_chunk(const char *file_url, const char *
 {
     doit_file_result_t ret = {.err_code = CL_OPRET_SUCCESS, .path = NULL, .type = NULL};
     /* 1 取文件名 */
-    char *file_name = get_file_name_in_url(file_url);
+    // char *file_name = get_file_name_in_url(file_url);
     /* 2.取文件类型*/
     char *file_type = get_file_type_in_url(file_url);
     // if (!file_name)
-
     /* 5.2 拼 FS 路径 */
     char full_path[32] = {0};
     snprintf(full_path, 32, "/littlefs/%s", dir_name);
     // 读取结构体初始化
     http_save_file_t save = {0};               // 初始化
-    save.file_handle = fopen(full_path, "wb"); // 打开文件，如果不存在则创建
-    save.buf_in_ram = (uint8_t *)heap_caps_malloc(HTTP_DOWNLOAD_CHUNK_BUFFER, MALLOC_CAP_SPIRAM);
+    // save.buf_in_ram = (uint8_t *)heap_caps_malloc(HTTP_DOWNLOAD_CHUNK_BUFFER, MALLOC_CAP_SPIRAM);
     save.final_path = full_path;
+    save.cur_sta = 0;
     save.already_in_buf = 0;
     save.total_written = 0;
 
-    if (!save.file_handle || !save.buf_in_ram)
-    {
-        if (save.file_handle)
-        {
-            fclose(save.file_handle);
-        }
-
-        if (save.buf_in_ram)
-        {
-            heap_caps_free(save.buf_in_ram);
-        }
-
-        ret.err_code = CL_OPERT_FAIL;
-        return ret;
-    }
     // 配置 HTTP 客户端 */
     esp_http_client_config_t config = {
         .url = file_url,
@@ -247,12 +234,12 @@ static doit_file_result_t http_download_chunk(const char *file_url, const char *
     {
         MP_LOGE("Error perform http request %s", esp_err_to_name(err));
     }
+     heap_caps_free(save.buf_in_ram);
+            save.buf_in_ram = NULL;
+            save.already_in_buf = 0;
     esp_http_client_cleanup(client);
-    /* ← 在这里加日志 */
-    MP_LOGI("[http_download_chunk] 文件写入完成，总计 %lu 字节 (%lu KB)",
-             save.total_written, save.total_written / 1024);
-    fclose(save.file_handle);
-    heap_caps_free(save.buf_in_ram);
+
+    // heap_caps_free(save.buf_in_ram);
     DIR *dir = opendir("/littlefs");
     if (dir)
     {
@@ -432,13 +419,18 @@ static bool is_http_file_content_length_overflow(const char *url)
     }
 
     /* 2.判断文件是否过大 */
-    if (s_content_len > HTTP_DOWNLOAD_MAX_SIZE)
+    //计算当前littleFS是否可以存储要下载的文件
+    size_t total = 0, used = 0;
+    ret = esp_littlefs_info("storage", &total, &used);
+    if(s_content_len > (total-used))
+    // if (s_content_len > HTTP_DOWNLOAD_MAX_SIZE)
     {
-        MP_LOGW("File size exceeds limit of %d bytes,Skip download", HTTP_DOWNLOAD_MAX_SIZE);
+        MP_LOGW("File size exceeds limit of %d bytes,Skip download",(total-used));
         ret = true;
     }
     else
     {
+        MP_LOGI(">>>File size verification is successful. Download is permitted.");
         ret = false;
     }
     esp_http_client_cleanup(head);
@@ -555,7 +547,6 @@ doit_file_result_t doit_file_download(const char *url, const char *dir_name)
         /* 展示 tip 并阻塞等待其结束 */
         download_fail_show_toast();
         ret.err_code = CL_OPRET_FILE_OVERFLOW;
-        return (doit_file_result_t){.err_code = CL_OPRET_FILE_OVERFLOW, .path = NULL};
     }
     else
     {
