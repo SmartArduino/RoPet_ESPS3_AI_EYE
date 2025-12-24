@@ -53,31 +53,6 @@ static void print_conn_desc(struct ble_gap_conn_desc *desc)
              desc->sec_state.bonded);
 }
 
-/* 构造 ManufacturerData：
-   [CompanyID(2 bytes little-endian)] + ['A''Y'(2 bytes魔数)] + [unique_id(2 bytes)] + [ver(1 byte)]
-   注意：CompanyID 建议用你真实的 Bluetooth SIG Company ID；没有的话临时用 0xFFFF 也能工作（只是“不规范”）
-*/
-static void fill_mfg_data(uint8_t *out, size_t out_len, uint16_t unique_id)
-{
-    // out_len 至少 2+2+2+1 = 7
-    if (out_len < 7) return;
-
-    out[0] = 0xE5; out[1] = 0x02;          // Company ID = 0xFFFF (临时)
-    out[2] = 'D';  out[3] = 'T';           // 魔数：DT（你也可以用 4 字节魔数）
-    out[4] = (uint8_t)(unique_id & 0xFF);  // unique_id L
-    out[5] = (uint8_t)(unique_id >> 8);    // unique_id H
-    out[6] = 0x01;                         // version
-}
-
-static uint16_t get_unique_id_from_mac(void)
-{
-    uint8_t addr[6] = {0};
-    // 取 public address（或你 own addr），用后两字节做 unique_id
-    // 注意：在 ble_hs 已同步后调用更稳
-    ble_hs_id_copy_addr(BLE_ADDR_PUBLIC, addr, NULL);
-    return (uint16_t)((addr[4] << 8) | addr[5]);
-}
-
 static void start_advertising(void)
 {
     /* Local variables */
@@ -96,29 +71,17 @@ static void start_advertising(void)
     adv_fields.name_len = strlen(name);
     adv_fields.name_is_complete = 1;
 
+    /* Set device tx power */
+    adv_fields.tx_pwr_lvl = BLE_HS_ADV_TX_PWR_LVL_AUTO;
+    adv_fields.tx_pwr_lvl_is_present = 1;
 
+    /* Set device appearance */
+    adv_fields.appearance = BLE_GAP_APPEARANCE_GENERIC_TAG;
+    adv_fields.appearance_is_present = 1;
 
-    
-    /* ManufacturerData 放 ADV（iOS 小程序识别最稳） */
-     static uint8_t mfg[7];
-    uint16_t uid = get_unique_id_from_mac();
-    fill_mfg_data(mfg, sizeof(mfg), uid);
-    MP_LOGI("mfg_data: %02X %02X %02X %02X %02X %02X %02X",
-             mfg[0], mfg[1], mfg[2], mfg[3], mfg[4], mfg[5], mfg[6]);
-    adv_fields.mfg_data = mfg;
-    adv_fields.mfg_data_len = sizeof(mfg);
-
-    // /* Set device tx power */
-    // adv_fields.tx_pwr_lvl = BLE_HS_ADV_TX_PWR_LVL_AUTO;
-    // adv_fields.tx_pwr_lvl_is_present = 1;
-
-    // /* Set device appearance */
-    // adv_fields.appearance = BLE_GAP_APPEARANCE_GENERIC_TAG;
-    // adv_fields.appearance_is_present = 1;
-
-    // /* Set device LE role */
-    // adv_fields.le_role = BLE_GAP_LE_ROLE_PERIPHERAL;
-    // adv_fields.le_role_is_present = 1;
+    /* Set device LE role */
+    adv_fields.le_role = BLE_GAP_LE_ROLE_PERIPHERAL;
+    adv_fields.le_role_is_present = 1;
 
     /* Set advertiement fields */
     rc = ble_gap_adv_set_fields(&adv_fields);
@@ -127,21 +90,18 @@ static void start_advertising(void)
         return;
     }
 
-        rsp_fields.uuids128 = (ble_uuid128_t *)&svc_uuid;
-    rsp_fields.num_uuids128 = 1;
-    rsp_fields.uuids128_is_complete = 1;
-    // /* Set device address */
-    // rsp_fields.device_addr = addr_val;
-    // rsp_fields.device_addr_type = own_addr_type;
-    // rsp_fields.device_addr_is_present = 1;
+    /* Set device address */
+    rsp_fields.device_addr = addr_val;
+    rsp_fields.device_addr_type = own_addr_type;
+    rsp_fields.device_addr_is_present = 1;
 
-    // // /* Set URI */
-    // // rsp_fields.uri = esp_uri;
-    // // rsp_fields.uri_len = sizeof(esp_uri);
+    // /* Set URI */
+    // rsp_fields.uri = esp_uri;
+    // rsp_fields.uri_len = sizeof(esp_uri);
 
-    // /* Set advertising interval */
-    // rsp_fields.adv_itvl = BLE_GAP_ADV_ITVL_MS(500);
-    // rsp_fields.adv_itvl_is_present = 1;
+    /* Set advertising interval */
+    rsp_fields.adv_itvl = BLE_GAP_ADV_ITVL_MS(500);
+    rsp_fields.adv_itvl_is_present = 1;
 
     /* Set scan response fields */
     rc = ble_gap_adv_rsp_set_fields(&rsp_fields);
