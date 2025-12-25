@@ -11,6 +11,7 @@
 #include "doit_nvs.h"
 #include "doit_file.h"
 #include "doit_ble.h"
+#include "doit_ui.h"
 
 #define JSON_MAX_LEN 256
 
@@ -19,8 +20,8 @@
 #define BLE_RATIO_360 "0002"
 #define BLE_RATIO_240 "0001"
 #define BLE_RATIO_160 "0000"
-#define BLE_REC_PLATFORM_EYE "01"   //用户进入双目
-#define BLE_REC_PLATFORM_BADGE "02" //用户进入吧唧
+#define BLE_REC_PLATFORM_EYE "0101"   //用户进入双目
+#define BLE_REC_PLATFORM_BADGE "0102" //用户进入吧唧
 
 /* Private variables */
 /* Private function declarations */
@@ -233,25 +234,27 @@ void gatt_svr_subscribe_cb(struct ble_gap_event *event)
         tx_chr_conn_handle_inited = true;
         tx_noti_status = event->subscribe.cur_notify;
 
+        if (!tx_noti_status) {
+            MP_LOGI("Phone UNsubscribed notify (cur_notify=0), skip sending.");
+        return;
+        }
+
         MP_LOGI( "Phone subscribed to notify, send resolution ratio...");
-// 传入连接句柄，确保数据发送到当前订阅的手机
-int ret = 0;
-#if CONFIG_LCD_ST77916_360X360
-        // ble_bin_notify_to_conn(&event->subscribe.conn_handle, ratio_360, sizeof(ratio_360));
-        ret = ble_json_notify_to_conn(&event->subscribe.conn_handle, BLE_RATIO_360);
+        // 传入连接句柄，确保数据发送到当前订阅的手机
+        int ret = 0;
+        uint16_t width,height = 0;
+        doit_get_ui_screen_size(&width, &height);
+        if(width == 160 && height == 160)
+            ret = ble_json_notify_to_conn(&event->subscribe.conn_handle, BLE_RATIO_160);
+        else if(width == 240 && height == 240)
+            ret = ble_json_notify_to_conn(&event->subscribe.conn_handle, BLE_RATIO_240);         
+        else if(width == 368 && height == 368)
+            ret = ble_json_notify_to_conn(&event->subscribe.conn_handle, BLE_RATIO_360);
+        
         if (ret == 0)
-            MP_LOGI( ">>>【通知】:分辨率 360x360");
-#elif CONFIG_LCD_GC9A01_240X240 || CONFIG_LCD_ST7796_240X240
-        // ble_bin_notify_to_conn(&event->subscribe.conn_handle, ratio_240, sizeof(ratio_240));
-        ret = ble_json_notify_to_conn(&event->subscribe.conn_handle, BLE_RATIO_240);
-        if (ret == 0)
-            MP_LOGI( ">>>【通知】:分辨率 240x240");
-#elif CONFIG_LCD_GC9A01_160X160
-        // ble_bin_notify_to_conn(&event->subscribe.conn_handle, ratio_160, sizeof(ratio_160));
-        ret = ble_json_notify_to_conn(&event->subscribe.conn_handle, BLE_RATIO_160);
-        if (ret == 0)
-            MP_LOGI( ">>>【通知】:分辨率 160x160");
-#endif
+            MP_LOGI( ">>>【通知】:分辨率 %dx%d",width,height);   
+        else
+            MP_LOGI( ">>>【通知】:分辨率发送失败");   
     }
 }
 
@@ -299,10 +302,8 @@ int ble_json_notify(const char *txt)
     {
         return BLE_HS_EAPP;
     }
-
     size_t txt_len = strlen(txt);
     char *txt_with_newline = malloc(txt_len + 2); // 分配内存，包括换行符和终止符
-
     if (txt_with_newline != NULL)
     {
         memcpy(txt_with_newline, txt, txt_len);
@@ -405,14 +406,26 @@ void ble_json_rx(const char *line)
     if (line)
     {
         MP_LOGI( "ble_json_rx: %s", line);
+        if(strcmp(line,"0303")==0){
+            // MP_LOGI("user choose platform command received,platform=%s",line);
+            return;
+            // ble_json_notify(line);
+        }
     }
 
+
     if(strcmp(line,BLE_REC_PLATFORM_EYE)==0){
-        platform_idx = atoi(line);
+        if(ble_json_notify(BLE_REC_PLATFORM_EYE)==0){
+            MP_LOGI( ">>>【通知】回复小程序进入平台：%s:成功",BLE_REC_PLATFORM_EYE);
+            platform_idx = 1;
+        }
         MP_LOGI(">>>user choose platform double eye,platform=%d",platform_idx);
     }
     else if(strcmp(line,BLE_REC_PLATFORM_BADGE)==0){
-         platform_idx = atoi(line);
+        if(ble_json_notify(BLE_REC_PLATFORM_BADGE)==0){
+            MP_LOGI( ">>>【通知】回复小程序进入平台：%s:成功",BLE_REC_PLATFORM_BADGE);
+            platform_idx = 2;
+        }
          MP_LOGI(">>>user choose platform badge,platform=%d",platform_idx);
     }
     else{
@@ -427,11 +440,13 @@ void ble_json_rx(const char *line)
         int rc;
         if (ret.err_code != CL_OPRET_SUCCESS)
         {
+            MP_LOGI("ssss");
             // 提示手机下载失败
             if(ble_json_notify(BLE_RESP_FAIL)==0){
                 MP_LOGI( ">>>【通知】回复小程序:失败");
             }
         }else{
+             MP_LOGI("ffff");
             // 下载完成，回复小程序，然后重启
             if(ble_json_notify(BLE_RESP_OK)==0){
                 MP_LOGI( ">>>【通知】回复小程序:成功");

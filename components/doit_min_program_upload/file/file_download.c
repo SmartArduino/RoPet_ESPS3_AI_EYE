@@ -20,7 +20,7 @@
 #include "esp_http_client.h"
 
 #include "esp_err.h"
-#include "esp_vfs.h" // 追加
+#include "esp_vfs.h"
 #include "esp_heap_caps.h"
 
 #include "esp_littlefs.h"
@@ -68,9 +68,29 @@ static doit_file_result_t http_download_chunk(const char *file_url, const char *
 static doit_file_result_t http_perform_as_stream_reader(const char *file_url);
 /* ==========================================*/
 
-/*===========================================文件下载相关函数=============================================================== */
-/* 销毁浮动进度页面 */
 
+/**
+ * @brief HTTP事件处理回调函数
+ * 
+ * 该函数用于处理HTTP客户端的各种事件，包括连接建立、数据接收、下载完成等。
+ * 主要功能包括：
+ * 1. 处理HTTP响应头，获取文件总大小
+ * 2. 管理下载进度，包括内存缓冲和文件写入
+ * 3. 处理网络错误和断开连接情况
+ * 
+ * @param evt HTTP事件结构体指针，包含事件类型和相关数据
+ * @return esp_err_t 返回ESP_OK表示成功，ESP_FAIL表示失败
+ * 
+ * @note 该函数会在以下事件中被调用：
+ * - HTTP_EVENT_ERROR: 发生错误
+ * - HTTP_EVENT_ON_CONNECTED: 连接建立
+ * - HTTP_EVENT_HEADER_SENT: 请求头发送完成
+ * - HTTP_EVENT_ON_HEADER: 接收到响应头
+ * - HTTP_EVENT_ON_DATA: 接收到数据
+ * - HTTP_EVENT_ON_FINISH: 下载完成
+ * - HTTP_EVENT_DISCONNECTED: 连接断开
+ * - HTTP_EVENT_REDIRECT: 重定向
+ */
 esp_err_t http_event_handler(esp_http_client_event_t *evt)
 {
     static uint32_t last_update = 0; // 上次更新时的已下载字节数
@@ -152,6 +172,7 @@ esp_err_t http_event_handler(esp_http_client_event_t *evt)
                 percent = (store->total_written * 100) / store->file_total;
                 download_progress_update_write(percent);
                 // MP_LOGI("》》》File writing: %d%% ,writen:%lu", percent,store->total_written);
+                vTaskDelay(pdMS_TO_TICKS(1)); // 给个延时
             }
             fflush(f);
             fclose(f);
@@ -186,9 +207,20 @@ esp_err_t http_event_handler(esp_http_client_event_t *evt)
     return ESP_OK;
 }
 
-/*
-    http事件回调下载方式
-*/
+/**
+ * @brief 通过HTTP分块下载文件到本地文件系统
+ * 
+ * @param file_url 要下载的文件的URL地址
+ * @param dir_name 本地保存目录名
+ * @return doit_file_result_t 返回下载结果，包含错误码、文件路径和文件类型
+ * 
+ * @note 函数执行流程：
+ * 1. 从URL中提取文件类型
+ * 2. 构建本地保存路径
+ * 3. 初始化HTTP下载配置
+ * 4. 执行文件下载
+ * 5. 清理资源并返回结果
+ */
 static doit_file_result_t http_download_chunk(const char *file_url, const char *dir_name)
 {
     doit_file_result_t ret = {.err_code = CL_OPRET_SUCCESS, .path = NULL, .type = NULL};
@@ -258,9 +290,20 @@ static doit_file_result_t http_download_chunk(const char *file_url, const char *
     return ret;
 }
 
-/*
-    http流式轮询下载方式
-*/
+
+/**
+ * @brief 通过HTTP流式下载文件并保存到本地文件系统
+ * 
+ * @param file_url 要下载的文件URL
+ * @return doit_file_result_t 返回操作结果，包含错误码和文件路径
+ * 
+ * 该函数执行以下操作：
+ * 1. 初始化HTTP客户端并建立连接
+ * 2. 读取前512字节用于检测文件类型
+ * 3. 根据URL生成目标文件路径
+ * 4. 流式下载并写入文件
+ * 5. 清理资源并返回结果
+ */
 static doit_file_result_t http_perform_as_stream_reader(const char *file_url)
 {
     doit_file_result_t ret = {.err_code = CL_OPRET_SUCCESS, .path = NULL};
@@ -397,8 +440,23 @@ static doit_file_result_t http_perform_as_stream_reader(const char *file_url)
     return ret;
 }
 
-/*======================================================================================================================= */
 
+
+/**
+ * @brief 检查HTTP文件内容长度是否超出存储限制
+ * 
+ * 通过HEAD请求获取文件大小，并与LittleFS可用空间进行比较，判断是否可以下载该文件
+ * 
+ * @param url 要检查的文件URL地址
+ * @return true 文件大小超出可用空间限制，不应下载
+ * @return false 文件大小在允许范围内，可以下载
+ * 
+ * @note 该函数会执行以下操作：
+ *       1. 发送HEAD请求获取文件大小
+ *       2. 获取LittleFS总空间和已用空间信息
+ *       3. 比较文件大小与可用空间
+ *       4. 返回是否允许下载的判断结果
+ */
 static bool is_http_file_content_length_overflow(const char *url)
 {
     MP_LOGI("Checking file size for URL: %s", url);
@@ -437,6 +495,16 @@ static bool is_http_file_content_length_overflow(const char *url)
     return ret;
 }
 
+
+/**
+ * @brief 下载文件到指定目录
+ * 
+ * @param url 要下载的文件URL
+ * @param dir_name 下载文件保存的目标目录名
+ * @return doit_file_result_t 返回下载结果，包含错误代码和文件路径
+ *         - err_code: 操作错误代码
+ *         - path: 下载文件的保存路径
+ */
 static doit_file_result_t to_download(const char *url, const char *dir_name)
 {
 
@@ -447,7 +515,15 @@ static doit_file_result_t to_download(const char *url, const char *dir_name)
     return http_download_chunk(url, dir_name);
 }
 
-/* 从 url 中提取纯文件名（不含扩展名），成功返回 malloc 的字符串，失败返回 NULL */
+
+/**
+ * @brief 从URL中提取文件名（不包含扩展名）
+ * 
+ * @param url 输入的URL字符串
+ * @return char* 返回新分配的内存，包含提取的文件名（不包含扩展名）。
+ *               如果输入为NULL或内存分配失败，返回NULL。
+ *               调用者负责释放返回的内存。
+ */
 static char *get_file_name_in_url(const char *url)
 {
     if (!url)
@@ -471,7 +547,26 @@ static char *get_file_name_in_url(const char *url)
     return out;
 }
 
-/* 返回静态字符串，URL 探测与 文件通用 */
+
+/**
+ * @brief 检测文件类型
+ * 
+ * 根据文件头的魔数（magic number）来判断文件类型。
+ * 支持检测的文件类型包括：VPG、JPEG、PNG、GIF、MP4、BMP、WEBP。
+ * 如果无法识别或文件太短，则返回"bin"。
+ * 
+ * @param data 文件数据的指针
+ * @param len 文件数据的长度
+ * @return const char* 返回文件类型字符串：
+ *         - "vpg": 自定义VPG格式
+ *         - "jpg": JPEG格式
+ *         - "png": PNG格式
+ *         - "gif": GIF格式
+ *         - "mp4": MP4格式
+ *         - "bmp": BMP格式
+ *         - "webp": WEBP格式
+ *         - "bin": 未知格式或文件太短
+ */
 static const char *detect_file_type(const char *data, int len)
 {
     MP_LOGI("Detecting file type...,len = %d", len);
@@ -521,6 +616,20 @@ static const char *detect_file_type(const char *data, int len)
     return "bin";
 }
 
+
+/**
+ * @brief 从URL中提取文件类型
+ * @details 该函数通过查找URL中最后一个'.'字符来获取文件类型，并返回该类型的字符串副本。
+ *          如果URL中不包含'.'字符，则返回空字符串。
+ * 
+ * @param url 输入的URL字符串
+ * @return char* 返回文件类型的字符串副本，如果找不到则返回空字符串。
+ *               注意：返回的字符串需要调用者负责释放内存。
+ * 
+ * @note 该函数不会修改原始URL字符串。
+ *       如果URL为NULL，行为未定义。
+ *       返回的空字符串是静态分配的，不应被修改。
+ */
 static char *get_file_type_in_url(const char *url)
 {
     char *dot = strrchr(url, '.');
@@ -532,7 +641,19 @@ static char *get_file_type_in_url(const char *url)
     return "";
 }
 
-// 下载图片，返回littlefs存储路径
+/**
+ * @brief 从指定URL下载文件到指定目录
+ * 
+ * @param url 要下载文件的URL地址
+ * @param dir_name 目标目录名称
+ * @return doit_file_result_t 返回下载结果，包含错误码和文件路径
+ *         - CL_OPRET_SUCCESS: 下载成功
+ *         - CL_OPRET_FILE_OVERFLOW: 文件大小超过限制
+ *         - 其他错误码: 下载过程中出现的其他错误
+ * 
+ * @note 此函数会先停止当前播放的VPG视频，然后检查文件大小是否超过限制。
+ *       如果文件大小在限制范围内，则执行下载操作。
+ */
 doit_file_result_t doit_file_download(const char *url, const char *dir_name)
 {
     doit_vpg_player_stop(); // 先停止当前播放的VPG视频

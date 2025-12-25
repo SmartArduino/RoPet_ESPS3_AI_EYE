@@ -8,6 +8,7 @@
 #include "ble_common.h"
 #include "gatt_svc.h"
 #include "doit_ble.h"
+#include "doit_ui.h"
 
 /* Private function declarations */
 inline static void format_addr(char *addr_str, uint8_t addr[]);
@@ -63,9 +64,19 @@ static void fill_mfg_data(uint8_t *out, size_t out_len, uint16_t unique_id)
     if (out_len < 7) return;
 
     out[0] = 0xE5; out[1] = 0x02;          // Company ID = 0xFFFF (临时)
-    out[2] = 'D';  out[3] = 'T';           // 魔数：DT（你也可以用 4 字节魔数）
-    out[4] = (uint8_t)(unique_id & 0xFF);  // unique_id L
-    out[5] = (uint8_t)(unique_id >> 8);    // unique_id H
+    out[2] = (uint8_t)(unique_id & 0xFF);  // unique_id L
+    out[3] = (uint8_t)(unique_id >> 8);    // unique_id H
+    //获取屏幕UI尺寸,分辨率数据：160分辨率：out[4]=0x01; 240分辨率：out[4]=0x02; 360分辨率：out[4]=0x03;
+    uint16_t width,height;
+    doit_get_ui_screen_size(&width, &height);
+    if(width == 160 && height == 160){
+        out[4] = 0x00;           
+    }else if(width == 240 && height == 240){
+        out[4] = 0x01;           
+    }else if(width == 368 && height == 368){
+        out[4] = 0x02;
+    }
+    out[5] = 0x00;      // 保留位
     out[6] = 0x01;                         // version
 }
 

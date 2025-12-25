@@ -263,7 +263,6 @@ void doit_vpg_player_stop(void)
     MP_LOGI( "VPG player stopped,Free PSRAM: %d,min free sram=%d", heap_caps_get_free_size(MALLOC_CAP_SPIRAM), heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM));
 }
 
-/**************************** CodeGeeX Inline Diff ****************************/
 /**
  * @brief 启动VPG视频播放器
  *
