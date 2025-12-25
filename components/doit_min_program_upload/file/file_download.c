@@ -51,6 +51,7 @@ typedef struct
 {
     // FILE *file_handle;       // 文件句柄
     uint8_t cur_sta;         // 当前状态,0:初始化,1:正在下载，2：下载完成，正在写入
+    bool is_success;        // 是否成功下载
     uint8_t *buf_in_ram;     // 攒写缓冲区（PSRAM）
     uint32_t already_in_buf; // 缓冲区里现在已多少字节
     char *final_path;        // 完整路径，回头要给主函数用
@@ -152,7 +153,7 @@ esp_err_t http_event_handler(esp_http_client_event_t *evt)
     case HTTP_EVENT_ON_FINISH:
         MP_LOGI("HTTP_EVENT_ON_FINISH");
 
-         // 如果下载完成，写入文件
+        // 如果下载完成，写入文件
         if(store->already_in_buf == store->file_total)
         {
             store->cur_sta = 2;
@@ -171,7 +172,6 @@ esp_err_t http_event_handler(esp_http_client_event_t *evt)
                 store->total_written += pre_write_num;
                 percent = (store->total_written * 100) / store->file_total;
                 download_progress_update_write(percent);
-                // MP_LOGI("》》》File writing: %d%% ,writen:%lu", percent,store->total_written);
                 vTaskDelay(pdMS_TO_TICKS(1)); // 给个延时
             }
             fflush(f);
@@ -180,6 +180,12 @@ esp_err_t http_event_handler(esp_http_client_event_t *evt)
             MP_LOGI("文件写入完成，总计 %lu 字节 (%lu KB)",
             store->total_written, store->total_written / 1024);
             download_progress_done();
+            store->is_success = true;
+        }else{  //可能传输过程中网络波动导致数据下载不完全，判断失败
+            MP_LOGE("下载失败，http连接未知中断");
+            download_progress_fail(UI_FAIL_NET_DISCONNECT);
+            store->is_success = false;
+            return ESP_FAIL;
         }
       
         break;
@@ -192,6 +198,7 @@ esp_err_t http_event_handler(esp_http_client_event_t *evt)
             sock_err, tls_err, tls_flags);
         if(sock_err == 113 && tls_err == 0 && tls_flags == 0) {
             MP_LOGE("下载失败，网络连接超时");
+            store->is_success = false;
             //回滚
             MP_LOGI("cur_sta=%d",store->cur_sta);
             if(store->cur_sta != 2)
@@ -237,6 +244,7 @@ static doit_file_result_t http_download_chunk(const char *file_url, const char *
     // save.buf_in_ram = (uint8_t *)heap_caps_malloc(HTTP_DOWNLOAD_CHUNK_BUFFER, MALLOC_CAP_SPIRAM);
     save.final_path = full_path;
     save.cur_sta = 0;
+    save.is_success = false;
     save.already_in_buf = 0;
     save.total_written = 0;
 
@@ -259,16 +267,25 @@ static doit_file_result_t http_download_chunk(const char *file_url, const char *
         MP_LOGI("HTTP chunk encoding Status = %d, content_length = %" PRId64,
                  esp_http_client_get_status_code(client),
                  esp_http_client_get_content_length(client));
-        ret.path = strdup(save.final_path); // 成功：把路径带回去
-        ret.type = strdup(file_type);       // 成功：把文件类型带回去
+        if(save.is_success){
+            ret.path = strdup(save.final_path); // 成功：把路径带回去
+            ret.type = strdup(file_type);       // 成功：把文件类型带回去
+        }else{
+            ret.err_code = CL_OPERT_FAIL;
+        }
+       
     }
     else
     {
+        ret.err_code = CL_OPERT_FAIL;
         MP_LOGE("Error perform http request %s", esp_err_to_name(err));
     }
-     heap_caps_free(save.buf_in_ram);
+
+    heap_caps_free(save.buf_in_ram);
             save.buf_in_ram = NULL;
             save.already_in_buf = 0;
+
+
     esp_http_client_cleanup(client);
 
     // heap_caps_free(save.buf_in_ram);
@@ -656,7 +673,6 @@ static char *get_file_type_in_url(const char *url)
  */
 doit_file_result_t doit_file_download(const char *url, const char *dir_name)
 {
-    doit_vpg_player_stop(); // 先停止当前播放的VPG视频
     MP_LOGI("Downloading file from : %s", url);
     doit_file_result_t ret = {.err_code = CL_OPRET_SUCCESS, .path = NULL};
 
@@ -671,9 +687,10 @@ doit_file_result_t doit_file_download(const char *url, const char *dir_name)
     }
     else
     {
+        doit_vpg_player_stop(); // 先停止当前播放的VPG视频
         /* 2.2 正常下载流程 */
         doit_file_result_t download_ret = to_download(url, dir_name);
-        if (download_ret.err_code == CL_OPRET_SUCCESS)
+        if (download_ret.err_code != CL_OPRET_SUCCESS)
             ret.err_code = download_ret.err_code;
     }
     return ret;

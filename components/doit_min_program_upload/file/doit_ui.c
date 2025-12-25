@@ -393,8 +393,8 @@ static void lvgl_progress_task(void *arg)
                     s_paused = true;
                     switch (reason) {
                     case UI_FAIL_NET_DISCONNECT:
-                        ui_progress_set_label("Network disconnected");
-                        vTaskDelay(pdMS_TO_TICKS(2000));
+                        ui_progress_set_label("Network Error");
+                        vTaskDelay(pdMS_TO_TICKS(3000));
                         goto _exit;
                         break;
                     case UI_FAIL_NO_SPACE:
