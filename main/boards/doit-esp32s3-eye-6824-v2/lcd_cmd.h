@@ -3,8 +3,7 @@
 #define __LCD_CMD_H__
 
 #ifdef __cplusplus
-extern "C"
-{
+extern "C" {
 #endif
 
 #if CONFIG_LCD_GC9A01_240X240 || CONFIG_LCD_GC9A01_160X160
@@ -15,7 +14,7 @@ extern "C"
 #include "esp_lcd_st7796.h"
 #endif
 
-#if CONFIG_LCD_GC9A01_240X240 
+#if CONFIG_LCD_GC9A01_240X240
 
 #elif CONFIG_LCD_GC9A01_160X160
 static const gc9a01_lcd_init_cmd_t vendor_specific_init_new[] = {

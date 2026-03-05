@@ -1,0 +1,7 @@
+menu "DOT_FS_FAT_CONFIG"
+    config FILE_BASE_PATH
+        string "Flash中素材文件的基础路径"
+        default "/psd"
+        help
+            设置 Flash 中素材文件的基础路径。
+endmenu

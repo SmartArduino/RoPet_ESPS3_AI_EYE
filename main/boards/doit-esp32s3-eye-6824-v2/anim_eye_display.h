@@ -5,8 +5,7 @@
  * @brief Otto机器人GIF表情显示类
  * 继承LcdDisplay，添加GIF表情支持
  */
-class AnimEyeDisplay : public SpiLcdDisplay
-{
+class AnimEyeDisplay : public LcdDisplay {
 public:
     /**
      * @brief 构造函数，参数与SpiLcdDisplay相同
@@ -17,15 +16,11 @@ public:
 
     virtual ~AnimEyeDisplay() = default;
 
-#if CONFIG_SUPPORT_MINI_PROGRAMS_REPLACE_PSD
-    void UpdateAnimContainer();
-    void SetPSD(uint8_t psd_order);
-#endif
 
     lv_obj_t *psd_container_ = nullptr;
     lv_obj_t *psd_obj_ = nullptr;
 
 private:
     void SetupAnimContainer();
-
+    void MpuInit();
 };

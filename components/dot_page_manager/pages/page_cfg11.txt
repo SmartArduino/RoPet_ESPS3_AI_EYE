@@ -1,0 +1,40 @@
+#ifndef PAGE_CFG_H
+#define PAGE_CFG_H
+
+#include "page_manager.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* 1. 页面 ID 枚举：当成“索引”用 */
+typedef enum {
+    PAGE_ID_NONE = -1,
+    PAGE_ID_PAGE1,
+    PAGE_ID_PAGE2,
+    PAGE_ID_PAGE3,
+    /* 新增页面继续往下写 */
+    PAGE_ID_MAX
+} page_id_t;
+
+/* 2. 常量表：名称 / 默认动画 / 是否缓存 … */
+typedef struct {
+    const char *name;
+    anim_type_t dft_anim_in;
+    bool keep_alive; /* 是否常驻内存 */
+} page_info_t;
+
+/* 3. 统一访问接口 */
+const page_info_t *page_info_get(page_id_t id);
+page_t *page_create_by_id(page_id_t id);
+void page_install(void);
+
+/* 4. 宏：一键切换，不用手写字符串 */
+#define PAGE_SWITCH(id, anim) \
+    page_manager_switch_to(page_info_get(id)->name, anim)
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

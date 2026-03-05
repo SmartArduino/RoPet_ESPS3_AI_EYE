@@ -1,0 +1,23 @@
+#ifndef __PAGE_TEMPLATE_H__
+#define __PAGE_TEMPLATE_H__
+
+#include "page_manager.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* 生命周期钩子，必须实现 */
+typedef struct {
+    void (*onCreate)(page_t *page);  /* 可选，可置 NULL */
+    void (*onCreated)(page_t *page); /* 可选，可置 NULL */
+    void (*onShow)(page_t *page);    /* 可选，可置 NULL */
+    void (*onHide)(page_t *page);    /* 可选，可置 NULL */
+    void (*onDestroy)(page_t *page); /* 可选，可置 NULL */
+} page_impl_t;
+
+
+#ifdef __cplusplus
+}
+#endif
+#endif

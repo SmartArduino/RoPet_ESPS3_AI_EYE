@@ -1,0 +1,35 @@
+#ifndef __PAGE_TEMPLATE_H__
+#define __PAGE_TEMPLATE_H__
+
+#include "page_manager.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* 生命周期钩子，必须实现 */
+typedef struct {
+    void (*onCreate)(page_t *page);  /* 可选，可置 NULL */
+    void (*onCreated)(page_t *page); /* 可选，可置 NULL */
+    void (*onShow)(page_t *page);    /* 可选，可置 NULL */
+    void (*onHide)(page_t *page);    /* 可选，可置 NULL */
+    void (*onDestroy)(page_t *page); /* 可选，可置 NULL */
+} page_impl_t;
+
+/* 一次性宏：生成 create_xxx 函数并自动注册,在创建页面的最后调用PAGE_REGISTER即可 */
+#define PAGE_REGISTER(ID, NAME, IMPL_PTR)                       \
+    static page_t page_##NAME;                                  \
+    __attribute__((constructor)) static void reg_##NAME(void) { \
+        page_##NAME.name = #NAME;                               \
+        page_##NAME.onCreate = (IMPL_PTR).onCreate;             \
+        page_##NAME.onCreated = (IMPL_PTR).onCreated;           \
+        page_##NAME.onShow = (IMPL_PTR).onShow;                 \
+        page_##NAME.onHide = (IMPL_PTR).onHide;                 \
+        page_##NAME.onDestroy = (IMPL_PTR).onDestroy;           \
+        page_manager_register_page(&page_##NAME);               \
+    }
+
+#ifdef __cplusplus
+}
+#endif
+#endif

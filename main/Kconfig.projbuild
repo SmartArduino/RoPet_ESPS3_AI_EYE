@@ -368,6 +368,21 @@ choice DOIT_DISPLAY_LCD_TYPE
         bool "GC9A01, 分辨率160*160, 0.71寸"
 endchoice
 
+config SUPPORT_MINI_PROGRAMS_REPLACE_PSD
+        bool "支持小程序素材替换（VPG动画眼睛）"
+        depends on IDF_TARGET_ESP32S3
+        help 
+            支持小程序素材替换（VPG动画眼睛）
+
+    config FILE_BASE_PATH
+        string "Flash中素材文件的基础路径"
+        depends on SUPPORT_MINI_PROGRAMS_REPLACE_PSD
+        default "/psd"
+        help
+            设置 Flash 中素材文件的基础路径。
+
+
+
 choice DISPLAY_ESP32S3_KORVO2_V3
     depends on BOARD_TYPE_ESP32S3_KORVO2_V3
     prompt "ESP32S3_KORVO2_V3 LCD Type"

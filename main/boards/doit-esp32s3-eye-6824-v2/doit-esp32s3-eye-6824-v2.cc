@@ -8,8 +8,6 @@
 #include "config.h"
 #include "led/single_led.h"
 // #include "power_save_timer.h"
-
-#include <wifi_station.h>
 #include <esp_log.h>
 #include <driver/i2c_master.h>
 #include <esp_lcd_panel_vendor.h>
@@ -23,12 +21,29 @@
 #include "mcp_server.h"
 #include "lcd_cmd.h"
 
-#include "doit_ble.h"
-#include "doit_file.h"
+#include "m_touch_button.h"
+#include "motor.h"
 
+#include <wifi_station.h>
+#include <wifi_configuration_ap.h>
+#include <ssid_manager.h>
+#include "settings.h"
+#ifdef CONFIG_USE_BLUFI_NET_CONFIGURING
+#include "esp_mac.h"
+#include "blufi_wificfg.h"
+#endif
+
+#if CONFIG_SUPPORT_MINI_PROGRAMS_REPLACE_PSD
+#include "dot_mp.h"
+#include "ext_nimble_svc.h"
+#include "progress.h"
+#include "ext_http_download.h"
+#include "ext_fat_svc.h"
+#include "page_manager.h"
+#endif
 
 #define TAG "CompactWifiBoardLCD"
-
+LV_FONT_DECLARE(font_puhui_16_4)
 #if CONFIG_LCD_ST77916_360X360 || CONFIG_LCD_ST7796_240X240 || CONFIG_LCD_GC9A01_240X240
 LV_FONT_DECLARE(font_puhui_20_4);
 LV_FONT_DECLARE(font_awesome_20_4);
@@ -37,8 +52,7 @@ LV_FONT_DECLARE(font_puhui_14_1);
 LV_FONT_DECLARE(font_awesome_14_1);
 #endif
 
-class CompactWifiBoardLCD : public WifiBoard
-{
+class CompactWifiBoardLCD : public WifiBoard {
 private:
     // i2c_master_bus_handle_t sc7a20h_bus_handle = NULL;
     // i2c_master_dev_handle_t sc7a20h_dev_handle = NULL;
@@ -47,104 +61,137 @@ private:
     Button boot_button_;
     LcdDisplay *display_;
     VbAduioCodec audio_codec;
-    // PowerSaveTimer *power_save_timer_;
-
-    //     void InitializePowerSaveTimer()
-    //     {
-    //         power_save_timer_ = new PowerSaveTimer(-1, 60, 300);
-    //         power_save_timer_->OnEnterSleepMode([this]()
-    //                                             {
-    //                                                 ESP_LOGI(TAG, "Enabling sleep mode");
-    //                                                 auto display = GetDisplay();
-    //                                                 display->SetChatMessage("system", "");
-    //                                                 display->SetEmotion("sleepy");
-    // #if CONFIG_LCD_GC9A01_160X160
-    //                                                 GetBacklight()->RestoreBrightness();
-    // #endif
-    //                                                 // gpio_set_level(SLEEP_GOIO, 0);
-    //                                             });
-    //         power_save_timer_->OnExitSleepMode([this]()
-    //                                            {
-    //                                                auto display = GetDisplay();
-    //                                                display->SetChatMessage("system", "");
-    //                                                display->SetEmotion("neutral");
-    // #if CONFIG_LCD_GC9A01_160X160
-    //                                                GetBacklight()->RestoreBrightness();
-    // #endif
-    //                                                // gpio_set_level(SLEEP_GOIO, 1);
-    //                                            });
-    //         power_save_timer_->OnShutdownRequest([this]()
-    //                                              {
-    //                                                  // pmic_->PowerOff();
-    //                                                  // gpio_set_level(SLEEP_GOIO, 0);
-    //                                                  //  ESP_LOGI(TAG,"Not used for a long time. Shut down. Press and hold to turn on!");
-    //                                                  //  gpio_set_level(SLEEP_GOIO, 0);
-    //                                              });
-    //         power_save_timer_->SetEnabled(true);
-    //     }
+    bool is_usb_mode = false;
 
     // 初始化按钮
-    void InitializeButtons()
-    {
+    void InitializeButtons() {
         // 当boot_button_被点击时，执行以下操作
-        boot_button_.OnClick([this]()
-                             {
-                                 ESP_LOGI(TAG, "Boot button clicked");
-                                 if(min_program_in_ota_mode()){
-                                    ESP_LOGI(TAG, "In PSD Ota Mode, restart system");
-                                    esp_restart();
-                                 }
-                                 // 获取应用程序实例
-                                 auto &app = Application::GetInstance();
-                                 app.ToggleChatState(); });
-
-#if (defined(CONFIG_VB6824_OTA_SUPPORT) && CONFIG_VB6824_OTA_SUPPORT == 1)
-        boot_button_.OnDoubleClick([this]()
-                                   {
-
-    // if (esp_timer_get_time() > 20 * 1000 * 1000){
-                ESP_LOGI(TAG, "Long press, do not enter OTA mode %ld", (uint32_t)esp_timer_get_time());
-#if CONFIG_USE_PSD_MULTIPLE
-        
-            doit_file_psd_multi_process(true);
-#endif
-                return;
-//         }else{
-// audio_codec.OtaStart(0);
-//         } 
-    });
-#endif
-
-        boot_button_.OnPressRepeaDone([this](uint16_t count)
-                                      {
+        boot_button_.OnClick([this]() {
 #if CONFIG_SUPPORT_MINI_PROGRAMS_REPLACE_PSD
-                                          if (count >= 5)
-                                          {
-                                             auto &app = Application::GetInstance();
-                                            if (esp_timer_get_time() > 20 * 1000 * 1000 && app.GetDeviceState() == kDeviceStateIdle && WifiStation::GetInstance().IsConnected() && !min_program_in_ota_mode()){
-                ESP_LOGI(TAG, "five press repeadone, do not enter PSD mode %ld", (uint32_t)esp_timer_get_time());
-                return;
-        }
-                                                     ESP_LOGI(TAG, "素材替换模式");
-    
-                                                Application::GetInstance().Schedule([]{
-Application::GetInstance().ResetDecoder();
-                                                  Application::GetInstance().PlaySound(Lang::Sounds::P3_SUCAI);
-                                                                                 vTaskDelay(2000);                min_program_ble_start();
-                                                });
-                                             
-                                              
-                                          } else
+            page_manager_t *pm = page_manager_get();
+            if (strcmp(pm->current_page->name, "tip_del") == 0) { // 在有素材的页面,双击删除素材
+                dot_mp_stop_play();
+                if (dot_fs_delete_current_node_and_file()) // 删除当前素材
+                    ESP_LOGI(TAG, "删除素材成功");
+                else
+                    ESP_LOGE(TAG, "删除素材失败");
+                dot_mp_start_play();
+                page_manager_switch_to_nohist("home", ANIM_TYPE_NONE); // 删除完显示主页
+            } else if (strcmp(pm->current_page->name, "home") == 0) {
+                switch_next_psd();
+            }
+#else
+            Application::GetInstance().ToggleChatState();
 #endif
-                                         if (count >= 3)
-                                          {
-                                              ESP_LOGI(TAG, "重新配网");
-                                              ResetWifiConfiguration();
-                                          } });
+        });
+
+        boot_button_.OnDoubleClick([this]() {
+#if CONFIG_SUPPORT_MINI_PROGRAMS_REPLACE_PSD
+            page_manager_t *pm = page_manager_get();
+            if (strcmp(pm->current_page->name, "home") == 0) { // 在有素材的页面,双击删除素材
+                page_manager_switch_to_nohist("tip_del", ANIM_TYPE_NONE);
+                ESP_LOGI(TAG, "显示删除界面");
+            } else if (strcmp(pm->current_page->name, "tip_del") == 0) {
+                page_manager_switch_to_nohist("home", ANIM_TYPE_NONE);
+                ESP_LOGI(TAG, "用户取消删除");
+            }
+#elif (defined(CONFIG_VB6824_OTA_SUPPORT) && CONFIG_VB6824_OTA_SUPPORT == 1)
+            if (esp_timer_get_time() > 20 * 1000 * 1000) {
+                ESP_LOGI(TAG, "Long press, do not enter OTA mode %ld", (uint32_t)esp_timer_get_time());
+                return;
+            } else {
+                audio_codec.OtaStart(0);
+            }
+#endif
+        });
+
+#if CONFIG_SUPPORT_MINI_PROGRAMS_REPLACE_PSD
+        boot_button_.OnPressRepeaDone([this](uint16_t count) {
+            if (count >= 5) {
+                auto &app = Application::GetInstance();
+                // if (esp_timer_get_time() < 20 * 1000 * 1000 && app.GetDeviceState() == kDeviceStateIdle && WifiStation::GetInstance().IsConnected()) {  // 超出20秒，按五下按键只能是u盘模式
+                // ESP_LOGI(TAG, "five press repeadone, do not enter PSD mode %ld", (uint32_t)esp_timer_get_time());
+                // dot_mp_switchRunOrUSB();
+                // return;
+                // } else {
+                ESP_LOGI(TAG, "素材替换模式");
+
+                Application::GetInstance().Schedule([] {
+                    Application::GetInstance().ResetDecoder();
+                    Application::GetInstance().PlaySound(Lang::Sounds::P3_SUCAI);
+                    vTaskDelay(2000);
+                    /* 1.蓝牙初始化 */
+                    dot_nimble_init([](char *str) {
+                        if (strcmp(str, BLE_REC_PLATFORM_EYE) == 0) {
+                            if (dot_send_str_to_phone(BLE_REC_PLATFORM_EYE)) {
+                                ESP_LOGI(TAG, ">>>【通知】回复小程序进入平台：%s:成功", BLE_REC_PLATFORM_EYE);
+                                dot_mp_set_platform_idx(1);
+                            }
+                            ESP_LOGI(TAG, ">>>user choose platform double eye,platform=%d", dot_mp_get_platform_idx());
+                        } else if (strcmp(str, BLE_REC_PLATFORM_BADGE) == 0) {
+                            if (dot_send_str_to_phone(BLE_REC_PLATFORM_BADGE)) {
+                                ESP_LOGI(TAG, ">>>【通知】回复小程序进入平台：%s:成功", BLE_REC_PLATFORM_BADGE);
+                                dot_mp_set_platform_idx(2);
+                            }
+                            ESP_LOGI(TAG, ">>>user choose platform badge,platform=%d", dot_mp_get_platform_idx());
+                        } else {
+                            // 根据搜到文件名，拼接http请求url
+                            char url[256]; // 确保有足够的空间存储完整的URL
+                            if (dot_mp_get_platform_idx() == 1)
+                                sprintf(url, "http://tui.doit.am/sucai/uploads/%s", str);
+                            else if (dot_mp_get_platform_idx() == 2)
+                                sprintf(url, "http://tui.doit.am/second_dimension/uploads/20%s", str);
+
+                            /* 停止播放 */
+                            dot_mp_stop_play();
+                            page_manager_switch_to("progress", ANIM_TYPE_NONE); // 切换到下载界面
+                            doit_file_result_t ret = dot_http_download(url);
+                            // ui_prog_done(); // 下载完成
+                            if (ret.err_code == HTTP_DL_SUC) {
+                                // 下载完成，回复小程序
+                                if (dot_send_str_to_phone(BLE_RESP_OK)) {
+                                    ESP_LOGI(TAG, ">>>【通知】回复小程序:成功");
+                                    // 整理文件
+                                    dot_fat_org_filder();
+                                }
+                            } else {
+                                // 提示手机下载失败
+                                if (dot_send_str_to_phone(BLE_RESP_FAIL)) {
+                                    ESP_LOGI(TAG, ">>>【通知】回复小程序:失败");
+                                }
+                                if (ret.err_code == HTTP_DL_FAIL_NET_DISCONNECT)
+                                    ui_prog_fail_wait(UI_PROG_FAIL_NET_DISCONNECT, 4000);
+                                else if (ret.err_code == HTTP_DL_FAIL_NO_SPACE)
+                                    ui_prog_fail_wait(UI_PROG_FAIL_NO_SPACE, 4000);
+                                else if (ret.err_code == HTTP_DL_FAIL_UNKNOW)
+                                    ui_prog_fail_wait(UI_PROG_FAIL_UNKNOWN, 4000);
+                            }
+                            dot_mp_start_play(); // 重新启动VPG视频播放
+                        }
+                    });
+                });
+                // }
+
+            } else
+#endif
+                if (count >= 3) {
+                ESP_LOGI(TAG, "重新配网");
+                ResetWifiConfiguration();
+            }
+        });
     }
 
-    void InitializeSpi()
-    {
+    // // 物联网初始化，添加对 AI 可见设备
+    // void
+    // InitializeIot()
+    // {
+    //     auto &thing_manager = iot::ThingManager::GetInstance();
+    //     thing_manager.AddThing(iot::CreateThing("Speaker"));
+    //     thing_manager.AddThing(iot::CreateThing("Screen"));
+    //     // thing_manager.AddThing(iot::CreateThing("Lamp"));
+    // }
+
+    void InitializeSpi() {
         ESP_LOGI(TAG, "Initialize QSPI bus");
 #if CONFIG_LCD_ST77916_360X360
         const spi_bus_config_t bus_config = {
@@ -158,19 +205,18 @@ Application::GetInstance().ResetDecoder();
         ESP_ERROR_CHECK(
             spi_bus_initialize(QSPI_LCD_HOST, &bus_config, SPI_DMA_CH_AUTO));
 #elif CONFIG_LCD_ST7796_240X240 || CONFIG_LCD_GC9A01_240X240 || CONFIG_LCD_GC9A01_160X160
-        spi_bus_config_t buscfg = {};
-        buscfg.mosi_io_num = SPI_LCD_GPIO_MOSI;
-        buscfg.miso_io_num = SPI_LCD_GPIO_MISO;
-        buscfg.sclk_io_num = SPI_LCD_GPIO_SCLK;
-        buscfg.quadwp_io_num = GPIO_NUM_NC;
-        buscfg.quadhd_io_num = GPIO_NUM_NC;
-        buscfg.max_transfer_sz = DISPLAY_WIDTH * DISPLAY_HEIGHT * sizeof(uint16_t);
-        ESP_ERROR_CHECK(spi_bus_initialize(SPI_LCD_HOST, &buscfg, SPI_DMA_CH_AUTO));
+    spi_bus_config_t buscfg = {};
+    buscfg.mosi_io_num = SPI_LCD_GPIO_MOSI;
+    buscfg.miso_io_num = SPI_LCD_GPIO_MISO;
+    buscfg.sclk_io_num = SPI_LCD_GPIO_SCLK;
+    buscfg.quadwp_io_num = GPIO_NUM_NC;
+    buscfg.quadhd_io_num = GPIO_NUM_NC;
+    buscfg.max_transfer_sz = DISPLAY_WIDTH * DISPLAY_HEIGHT * sizeof(uint16_t);
+    ESP_ERROR_CHECK(spi_bus_initialize(SPI_LCD_HOST, &buscfg, SPI_DMA_CH_AUTO));
 #endif
     }
 
-    void InitializeDisplay()
-    {
+    void InitializeDisplay() {
 #if CONFIG_LCD_ST77916_360X360
         const esp_lcd_panel_io_spi_config_t io_config = ST77916_PANEL_IO_QSPI_CONFIG(QSPI_PIN_NUM_LCD_CS, NULL, NULL);
         ESP_ERROR_CHECK(esp_lcd_new_panel_io_spi(
@@ -199,7 +245,7 @@ Application::GetInstance().ResetDecoder();
         esp_lcd_panel_mirror(panel, false, false);
         esp_lcd_panel_disp_on_off(panel, true);
         esp_lcd_panel_init(panel);
-#if  CONFIG_SUPPORT_MINI_PROGRAMS_REPLACE_PSD
+#if CONFIG_SUPPORT_MINI_PROGRAMS_REPLACE_PSD
         display_ = new AnimEyeDisplay(panel_io, panel,
                                       DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X,
                                       DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY,
@@ -227,106 +273,471 @@ Application::GetInstance().ResetDecoder();
         // 设置GPIO引脚电平为高
         ESP_ERROR_CHECK(gpio_set_level(QSPI_PIN_NUM_LCD_BL, QSPI_DISPLAY_BACKLIGHT_OUTPUT_INVERT));
 #elif CONFIG_LCD_ST7796_240X240 || CONFIG_LCD_GC9A01_240X240 || CONFIG_LCD_GC9A01_160X160
-        esp_lcd_panel_io_spi_config_t io_config = {};
-        io_config.cs_gpio_num = SPI_LCD_GPIO_CS;
-        io_config.dc_gpio_num = SPI_LCD_GPIO_DC;
-        io_config.spi_mode = 0;
-        io_config.pclk_hz = 40 * 1000 * 1000;
-        io_config.trans_queue_depth = 10;
-        io_config.lcd_cmd_bits = 8;
-        io_config.lcd_param_bits = 8;
-        ESP_ERROR_CHECK(esp_lcd_new_panel_io_spi(SPI_LCD_HOST, &io_config, &panel_io));
+    esp_lcd_panel_io_spi_config_t io_config = {};
+    io_config.cs_gpio_num = SPI_LCD_GPIO_CS;
+    io_config.dc_gpio_num = SPI_LCD_GPIO_DC;
+    io_config.spi_mode = 0;
+    io_config.pclk_hz = 40 * 1000 * 1000;
+    io_config.trans_queue_depth = 10;
+    io_config.lcd_cmd_bits = 8;
+    io_config.lcd_param_bits = 8;
+    ESP_ERROR_CHECK(esp_lcd_new_panel_io_spi(SPI_LCD_HOST, &io_config, &panel_io));
 
-        ESP_LOGD(TAG, "Install LCD driver");
+    ESP_LOGD(TAG, "Install LCD driver");
 
 #if CONFIG_LCD_ST7796_240X240
-        st7796_vendor_config_t st7796_vendor_config = {
-            .init_cmds = vendor_specific_init_new,
-            .init_cmds_size = sizeof(vendor_specific_init_new) / sizeof(st7796_lcd_init_cmd_t),
-        };
-        esp_lcd_panel_dev_config_t panel_config = {};
-        panel_config.reset_gpio_num = SPI_LCD_GPIO_RST;
-        panel_config.color_space = ESP_LCD_COLOR_SPACE_RGB;
-        panel_config.rgb_ele_order = DISPLAY_RGB_ORDER;
-        panel_config.bits_per_pixel = 16;
-        panel_config.vendor_config = &st7796_vendor_config;
-        ESP_ERROR_CHECK(esp_lcd_new_panel_st7796(panel_io, &panel_config, &panel));
+    st7796_vendor_config_t st7796_vendor_config = {
+        .init_cmds = vendor_specific_init_new,
+        .init_cmds_size = sizeof(vendor_specific_init_new) / sizeof(st7796_lcd_init_cmd_t),
+    };
+    esp_lcd_panel_dev_config_t panel_config = {};
+    panel_config.reset_gpio_num = SPI_LCD_GPIO_RST;
+    panel_config.color_space = ESP_LCD_COLOR_SPACE_RGB;
+    panel_config.rgb_ele_order = DISPLAY_RGB_ORDER;
+    panel_config.bits_per_pixel = 16;
+    panel_config.vendor_config = &st7796_vendor_config;
+    ESP_ERROR_CHECK(esp_lcd_new_panel_st7796(panel_io, &panel_config, &panel));
 #elif CONFIG_LCD_GC9A01_240X240
-        esp_lcd_panel_dev_config_t panel_config = {
-            .reset_gpio_num = SPI_LCD_GPIO_RST,
-            .color_space = ESP_LCD_COLOR_SPACE_RGB,
-            .bits_per_pixel = 16};
-        panel_config.rgb_endian = DISPLAY_RGB_ORDER;
-        ESP_ERROR_CHECK(esp_lcd_new_panel_gc9a01(panel_io, &panel_config, &panel));
+    esp_lcd_panel_dev_config_t panel_config = {
+        .reset_gpio_num = SPI_LCD_GPIO_RST,
+        .color_space = ESP_LCD_COLOR_SPACE_RGB,
+        .bits_per_pixel = 16};
+    panel_config.rgb_endian = DISPLAY_RGB_ORDER;
+    ESP_ERROR_CHECK(esp_lcd_new_panel_gc9a01(panel_io, &panel_config, &panel));
 #elif CONFIG_LCD_GC9A01_160X160
-        esp_lcd_panel_dev_config_t panel_config = {
-            .reset_gpio_num = SPI_LCD_GPIO_RST,
-            .color_space = ESP_LCD_COLOR_SPACE_RGB,
-            .bits_per_pixel = 16};
-        panel_config.rgb_endian = DISPLAY_RGB_ORDER;
-        gc9a01_vendor_config_t gc9107_vendor_config = {
-            .init_cmds = vendor_specific_init_new,
-            .init_cmds_size = sizeof(vendor_specific_init_new) / sizeof(gc9a01_lcd_init_cmd_t),
-        };
-        panel_config.vendor_config = &gc9107_vendor_config;
-        esp_lcd_new_panel_gc9a01(panel_io, &panel_config, &panel);
+    esp_lcd_panel_dev_config_t panel_config = {
+        .reset_gpio_num = SPI_LCD_GPIO_RST,
+        .color_space = ESP_LCD_COLOR_SPACE_RGB,
+        .bits_per_pixel = 16};
+    panel_config.rgb_endian = DISPLAY_RGB_ORDER;
+    gc9a01_vendor_config_t gc9107_vendor_config = {
+        .init_cmds = vendor_specific_init_new,
+        .init_cmds_size = sizeof(vendor_specific_init_new) / sizeof(gc9a01_lcd_init_cmd_t),
+    };
+    panel_config.vendor_config = &gc9107_vendor_config;
+    esp_lcd_new_panel_gc9a01(panel_io, &panel_config, &panel);
 #endif
-        ESP_ERROR_CHECK(esp_lcd_panel_reset(panel));
-        ESP_ERROR_CHECK(esp_lcd_panel_init(panel));
-        ESP_ERROR_CHECK(esp_lcd_panel_invert_color(panel, DISPLAY_COLOR_INVERT));
-        ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel, true));
+    ESP_ERROR_CHECK(esp_lcd_panel_reset(panel));
+    ESP_ERROR_CHECK(esp_lcd_panel_init(panel));
+    ESP_ERROR_CHECK(esp_lcd_panel_invert_color(panel, DISPLAY_COLOR_INVERT));
+    ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel, true));
 
 #if CONFIG_SUPPORT_MINI_PROGRAMS_REPLACE_PSD
-        display_ = new AnimEyeDisplay(panel_io, panel,
-                                      DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X,
-                                      DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY,
-                                      {
+    display_ = new AnimEyeDisplay(panel_io, panel,
+                                  DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X,
+                                  DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY,
+                                  {
 #if CONFIG_LCD_GC9A01_240X240 || CONFIG_LCD_ST7796_240X240
-                                          .text_font = &font_puhui_20_4,
-                                          .icon_font = &font_awesome_20_4,
+                                      .text_font = &font_puhui_20_4,
+                                      .icon_font = &font_awesome_20_4,
 #elif CONFIG_LCD_GC9A01_160X160
-                                          .text_font = &font_puhui_14_1,
-                                          .icon_font = &font_awesome_14_1,
+                                      .text_font = &font_puhui_14_1,
+                                      .icon_font = &font_awesome_14_1,
 #endif
-                                          .emoji_font = font_emoji_64_init()});
+                                      .emoji_font = font_emoji_64_init()});
 #else
-        display_ = new SpiLcdDisplay(panel_io, panel,
-                                     DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X,
-                                     DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY,
-                                     {
+    display_ = new SpiLcdDisplay(panel_io, panel,
+                                 DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X,
+                                 DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY,
+                                 {
 #if CONFIG_LCD_GC9A01_240X240 || CONFIG_LCD_ST7796_240X240
-                                         .text_font = &font_puhui_20_4,
-                                         .icon_font = &font_awesome_20_4,
+                                     .text_font = &font_puhui_20_4,
+                                     .icon_font = &font_awesome_20_4,
 #elif CONFIG_LCD_GC9A01_160X160
-                                         .text_font = &font_puhui_14_1,
-                                         .icon_font = &font_awesome_14_1,
+                                     .text_font = &font_puhui_14_1,
+                                     .icon_font = &font_awesome_14_1,
 #endif
-                                         .emoji_font = font_emoji_64_init()});
+                                     .emoji_font = font_emoji_64_init()});
 
 #endif
-        gpio_config_t config;
-        config.pin_bit_mask = BIT64(SPI_LCD_BL);
-        config.mode = GPIO_MODE_OUTPUT;
-        config.pull_up_en = GPIO_PULLUP_DISABLE;
-        config.pull_down_en = GPIO_PULLDOWN_ENABLE;
-        config.intr_type = GPIO_INTR_DISABLE;
-        gpio_config(&config);
-        gpio_set_level(SPI_LCD_BL, SPI_DISPLAY_BACKLIGHT_OUTPUT_INVERT);
+    gpio_config_t config;
+    config.pin_bit_mask = BIT64(SPI_LCD_BL);
+    config.mode = GPIO_MODE_OUTPUT;
+    config.pull_up_en = GPIO_PULLUP_DISABLE;
+    config.pull_down_en = GPIO_PULLDOWN_ENABLE;
+    config.intr_type = GPIO_INTR_DISABLE;
+    gpio_config(&config);
+    gpio_set_level(SPI_LCD_BL, SPI_DISPLAY_BACKLIGHT_OUTPUT_INVERT);
 #endif
 #if CONFIG_LCD_GC9A01_160X160 || CONFIG_LCD_ST7796_240X240 || CONFIG_LCD_ST77916_360X360
         GetBacklight()->SetBrightness(100);
 #endif
     }
 
-    void InitializeTools()
-    {
-        auto &mcp_server = McpServer::GetInstance();
+    virtual void EnterWifiConfigMode() override {
+#ifdef CONFIG_USE_BLUFI_NET_CONFIGURING
+        ble_active_ = true; // 设置蓝牙为活跃状态
+
+        bool is_got_ip = false;
+        esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, [](void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data) {
+        bool *is_got_ip = (bool *)arg;
+        *is_got_ip = true; }, &is_got_ip);
+
+        uint8_t mac[6];
+        static char blufi_device_name[18];
+        esp_read_mac(mac, ESP_MAC_WIFI_STA);
+        snprintf(blufi_device_name, sizeof(blufi_device_name), "DTXZ_%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+        ESP_LOGI(TAG, "BLUFI Device Name: %s", blufi_device_name);
+
+        blufi_wificfg_cbs_t cbs = {
+            .sta_config_cb = [](const wifi_config_t *config, void *arg) {
+            ESP_LOGI(TAG, "Received sta config, ssid: %s, password: %s", config->sta.ssid, config->sta.password);
+            std::string ssid(reinterpret_cast<const char*>(config->sta.ssid));
+            std::string password(reinterpret_cast<const char*>(config->sta.password));
+            SsidManager::GetInstance().AddSsid(ssid, password); },
+            .custom_data_cb = [](const uint8_t *data, size_t len, void *arg) {
+            ESP_LOGI(TAG, "Received custom data: %.*s", (int)len, data);
+            if (strncmp((char *)data, "AT+OTA=", 7) == 0) {
+                std::string url(reinterpret_cast<const char*>(data+7), len-7);
+                ESP_LOGI(TAG, "ota_url: %s", url.c_str());
+                Settings settings("wifi", true);
+                settings.SetString("ota_url", url);
+            } }};
+
+        auto &application = Application::GetInstance();
+        application.SetDeviceState(kDeviceStateWifiConfiguring);
+        static char mac_str[18];
+        snprintf(mac_str, sizeof(mac_str), "%02x:%02x:%02x:%02x:%02x:%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+        std::string msg = std::string(mac_str) + "\r\n" + "网络配置中,请使用四博小助手配网";
+        application.Alert(Lang::Strings::WIFI_CONFIG_MODE, msg.c_str(), "", Lang::Sounds::P3_WIFICONFIG);
+
+        page_manager_switch_to_ex("wifi_cfg", ANIM_TYPE_NONE, msg.c_str(), strlen(msg.c_str()));
+
+        vTaskDelay(pdMS_TO_TICKS(2000));
+        application.ReleaseDecoder();
+
+        blufi_wificfg_start(true, blufi_device_name, cbs, this);
+
+        while (!is_got_ip) {
+            vTaskDelay(pdMS_TO_TICKS(500));
+        }
+
+        Ota ota;
+        const int MAX_RETRY = 10;
+        int retry_count = 0;
+        int retry_delay = 10; // 初始重试延迟为10秒
+        while (true) {
+            if (!ota.CheckVersion()) {
+                retry_count++;
+                if (retry_count >= MAX_RETRY) {
+                    ESP_LOGE(TAG, "Too many retries, exit version check");
+                    ResetWifiConfiguration();
+                    return;
+                }
+
+                ESP_LOGW(TAG, "Check new version failed, retry in %d seconds (%d/%d)", retry_delay, retry_count, MAX_RETRY);
+                for (int i = 0; i < retry_delay; i++) {
+                    vTaskDelay(pdMS_TO_TICKS(1000));
+                }
+                retry_delay *= 2; // 每次重试后延迟时间翻倍
+                continue;
+            }
+
+            auto &code = ota.GetActivationCode();
+            ESP_LOGI(TAG, "Activation code: %s", code.c_str());
+            if (!code.empty()) {
+                blufi_wificfg_send_custom((uint8_t *)code.c_str(), code.length());
+            } else {
+                uint8_t data[6] = {0};
+                blufi_wificfg_send_custom(data, 6);
+            }
+
+            vTaskDelay(pdMS_TO_TICKS(200));
+            ble_active_ = false; // 设置蓝牙为非活跃状态
+            esp_restart();
+        }
+#else
+    auto &application = Application::GetInstance();
+    application.SetDeviceState(kDeviceStateWifiConfiguring);
+
+    auto &wifi_ap = WifiConfigurationAp::GetInstance();
+    wifi_ap.SetLanguage(Lang::CODE);
+    wifi_ap.SetSsidPrefix("Xiaozhi");
+    wifi_ap.Start();
+
+    // 显示 WiFi 配置 AP 的 SSID 和 Web 服务器 URL
+    std::string hint = Lang::Strings::CONNECT_TO_HOTSPOT;
+    hint += wifi_ap.GetSsid();
+    hint += Lang::Strings::ACCESS_VIA_BROWSER;
+    hint += wifi_ap.GetWebServerUrl();
+    hint += "\n\n";
+
+    // 播报配置 WiFi 的提示
+    application.Alert(Lang::Strings::WIFI_CONFIG_MODE, hint.c_str(), "", Lang::Sounds::P3_WIFICONFIG);
+
+    page_manager_switch_to_ex("wifi_cfg", ANIM_TYPE_NONE, hint.c_str(), strlen(hint.c_str()));
+
+    // Wait forever until reset after configuration
+    while (true) {
+        int free_sram = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+        int min_free_sram = heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL);
+        ESP_LOGI(TAG, "Free internal: %u minimal internal: %u", free_sram, min_free_sram);
+        vTaskDelay(pdMS_TO_TICKS(10000));
+    }
+#endif
     }
 
+    virtual void StartNetwork() override {
+        // User can press BOOT button while starting to enter WiFi configuration mode
+        if (wifi_config_mode_) {
+            EnterWifiConfigMode();
+            return;
+        }
+        // If no WiFi SSID is configured, enter WiFi configuration mode
+        auto &ssid_manager = SsidManager::GetInstance();
+        auto ssid_list = ssid_manager.GetSsidList();
+        if (ssid_list.empty()) {
+            wifi_config_mode_ = true;
+            EnterWifiConfigMode();
+            return;
+        }
+
+        auto &wifi_station = WifiStation::GetInstance();
+        wifi_station.OnScanBegin([this]() {
+            auto display = Board::GetInstance().GetDisplay();
+            display->ShowNotification(Lang::Strings::SCANNING_WIFI, 30000); });
+        wifi_station.OnConnect([this](const std::string &ssid) {
+            auto display = Board::GetInstance().GetDisplay();
+            std::string notification = Lang::Strings::CONNECT_TO;
+            notification += ssid;
+            notification += "...";
+            display->ShowNotification(notification.c_str(), 30000); });
+        wifi_station.OnConnected([this](const std::string &ssid) {
+            auto display = Board::GetInstance().GetDisplay();
+            std::string notification = Lang::Strings::CONNECTED_TO;
+            notification += ssid;
+            display->ShowNotification(notification.c_str(), 30000);
+        });
+        wifi_station.Start();
+
+        // Try to connect to WiFi, if failed, launch the WiFi configuration AP
+        if (!wifi_station.WaitForConnected(60 * 1000)) {
+            wifi_station.Stop();
+            wifi_config_mode_ = true;
+            EnterWifiConfigMode();
+            return;
+        }
+    }
+
+    //===============================================SC7A20H传感器========================================
+    // void I2C_ScanBus()
+    // {
+    //     ESP_LOGI(TAG, "开始 I2C 扫描（新驱动）...");
+
+    //     /* 2. 逐地址探测 */
+    //     int found = 0;
+    //     for (uint8_t addr = 0x08; addr <= 0x77; ++addr)
+    //     {
+    //         if (i2c_master_probe(sc7a20h_bus_handle, addr, 50) == ESP_OK)
+    //         {
+    //             ESP_LOGI(TAG, "发现设备 at 0x%02X", addr);
+    //             ++found;
+    //         }
+    //     }
+
+    //     ESP_LOGI(TAG, "扫描完成，共发现 %d 个设备", found);
+    // }
+    // inline uint8_t SL_SC7A20H_I2c_Spi_Write(uint8_t sl_spi_iic,
+    //                                         uint8_t reg,
+    //                                         uint8_t dat)
+    // {
+    //     if (sl_spi_iic != 1)
+    //         return 0; // 只跑 I2C
+    //     uint8_t buf[2] = {reg, dat};
+    //     return i2c_master_transmit(sc7a20h_dev_handle, buf, sizeof(buf), -1) == ESP_OK ? 1 : 0;
+    // }
+
+    // void AccTaskEntry(void *)
+    // {
+    //     int16_t x, y, z;
+    //     uint8_t raw[6];
+    //     for (;;)
+    //     {
+    //         /* 一次读 6 字节，自动递增 */
+    //         if (i2c_master_transmit_receive(sc7a20h_dev_handle,
+    //                                         (uint8_t[]){0x28 | 0x80}, 1,
+    //                                         raw, 6, pdMS_TO_TICKS(100)) == ESP_OK)
+    //         {
+    //             x = (int16_t)((raw[1] << 8) | raw[0]) >> 4;
+    //             y = (int16_t)((raw[3] << 8) | raw[2]) >> 4;
+    //             z = (int16_t)((raw[5] << 8) | raw[4]) >> 4;
+    //             ESP_LOGI("ACC", "X:%6d Y:%6d Z:%6d", x, y, z);
+    //         }
+    //         else
+    //         {
+    //             ESP_LOGE("ACC", "read fail");
+    //         }
+    //         vTaskDelay(pdMS_TO_TICKS(100)); // 100 Hz 采样
+    //     }
+    // }
+
+    // esp_err_t sc7a20h_write_byte(uint8_t reg, uint8_t value)
+    // {
+    //     uint8_t buf[2] = {reg, value};
+
+    //     /* new driver 一次写命令+数据 */
+    //     return i2c_master_transmit(sc7a20h_dev_handle, buf, sizeof(buf), pdMS_TO_TICKS(1000));
+    // }
+
+    // esp_err_t sc7a20h_read_bytes(uint8_t reg, uint8_t *data, size_t len)
+    // {
+    //     /* 第一步：把寄存器地址发出去 */
+    //     esp_err_t ret = i2c_master_transmit(sc7a20h_dev_handle, &reg, 1, pdMS_TO_TICKS(1000));
+    //     if (ret != ESP_OK)
+    //     {
+    //         return ret;
+    //     }
+
+    //     /* 第二步：重启总线，读回 len 字节 */
+    //     return i2c_master_receive(sc7a20h_dev_handle, data, len, pdMS_TO_TICKS(1000));
+    // }
+
+    /**
+     * @brief 读取加速度数据(12位分辨率)
+     * @param x X轴加速度输出(单位: mg, 范围: ±2000mg)
+     * @param y Y轴加速度输出(单位: mg, 范围: ±2000mg)
+     * @param z Z轴加速度输出(单位: mg, 范围: ±2000mg)
+     * @return esp_err_t ESP_OK表示成功
+     *
+     * 该函数一次性读取OUT_X_L_REG(0x28)到OUT_Z_H_REG(0x2D)共6个寄存器，
+     * 将高低字节组合成16位数据后右移4位(12位有效数据)，
+     * 根据CTRL_REG4配置的±4g量程，1LSB对应1mg
+     */
+    // esp_err_t sc7a20h_read_accel(int16_t *x, int16_t *y, int16_t *z)
+    // {
+    //     if (x == NULL || y == NULL || z == NULL)
+    //     {
+    //         ESP_LOGE(TAG, "无效的输出指针");
+    //         return ESP_ERR_INVALID_ARG;
+    //     }
+
+    //     uint8_t data[6] = {0};
+    //     esp_err_t err_XL = sc7a20h_read_bytes(OUT_X_L_REG, &data[0], 1);
+    //     if (err_XL != ESP_OK)
+    //     {
+    //         ESP_LOGE(TAG, "读取加速度数据失败: 0x%x", err_XL);
+    //         return err_XL;
+    //     }
+    //     esp_err_t err_XH = sc7a20h_read_bytes(OUT_X_H_REG, &data[1], 1);
+    //     if (err_XH != ESP_OK)
+    //     {
+    //         ESP_LOGE(TAG, "读取加速度数据失败: 0x%x", err_XH);
+    //         return err_XH;
+    //     }
+    //     esp_err_t err_YL = sc7a20h_read_bytes(OUT_Y_L_REG, &data[2], 1);
+    //     if (err_YL != ESP_OK)
+    //     {
+    //         ESP_LOGE(TAG, "读取加速度数据失败: 0x%x", err_YL);
+    //         return err_YL;
+    //     }
+    //     esp_err_t err_YH = sc7a20h_read_bytes(OUT_Y_H_REG, &data[3], 1);
+    //     if (err_YH != ESP_OK)
+    //     {
+    //         ESP_LOGE(TAG, "读取加速度数据失败: 0x%x", err_YH);
+    //         return err_YH;
+    //     }
+    //     esp_err_t err_ZL = sc7a20h_read_bytes(OUT_Z_L_REG, &data[4], 1);
+    //     if (err_ZL != ESP_OK)
+    //     {
+    //         ESP_LOGE(TAG, "读取加速度数据失败: 0x%x", err_ZL);
+    //         return err_ZL;
+    //     }
+    //     esp_err_t err_ZH = sc7a20h_read_bytes(OUT_Z_H_REG, &data[5], 1);
+    //     if (err_ZH != ESP_OK)
+    //     {
+    //         ESP_LOGE(TAG, "读取加速度数据失败: 0x%x", err_ZH);
+    //         return err_ZH;
+    //     }
+
+    //     // 组合高低字节(16位有符号数)
+    //     int16_t raw_x = (int16_t)((data[1] << 8) | data[0]);
+    //     int16_t raw_y = (int16_t)((data[3] << 8) | data[2]);
+    //     int16_t raw_z = (int16_t)((data[5] << 8) | data[4]);
+
+    //     // ±4g量程时 1LSB = 1mg
+    //     *x = raw_x;
+    //     *y = raw_y;
+    //     *z = raw_z;
+
+    //     // // 转换为g值(1g = 1000mg)
+    //     // float g_x = raw_x / 1000.0f;
+    //     // float g_y = raw_y / 1000.0f;
+    //     // float g_z = raw_z / 1000.0f;
+
+    //     // ESP_LOGI(TAG, "加速度数据: X=%.2fmg(0x%04X) Y=%.2fmg(0x%04X) Z=%.2fmg(0x%04X)",
+    //     //          (float)raw_x, (uint16_t)raw_x,
+    //     //          (float)raw_y, (uint16_t)raw_y,
+    //     //          (float)raw_z, (uint16_t)raw_z);
+    //     // ESP_LOGI(TAG, "Accel X:%.2fg Y:%.2fg Z:%.2fg", g_x, g_y, g_z);
+
+    //     return ESP_OK;
+    // }
+
+    // void InitializeSC7A20H(void)
+    // {
+    //     /* 1. 创建 I2C 主机总线 */
+    //     i2c_master_bus_config_t i2c_bus_config = {
+    //         .i2c_port = SC7A20H_I2C_PORT,
+    //         .sda_io_num = SC7A20H_I2C_SDA,
+    //         .scl_io_num = SC7A20H_I2C_SCL,
+    //         .clk_source = I2C_CLK_SRC_DEFAULT,
+    //         .glitch_ignore_cnt = 7,
+    //         .flags = {
+    //             .enable_internal_pullup = 1,
+    //         },
+    //     };
+
+    //     ESP_ERROR_CHECK(i2c_new_master_bus(&i2c_bus_config, &sc7a20h_bus_handle));
+    //     I2C_ScanBus();
+    //     /* 2. 初始化传感器 */
+
+    //     i2c_device_config_t sc7a20h_cfg = {
+    //         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+    //         .device_address = SC7A20H_I2C_ADDR,
+    //         .scl_speed_hz = 400 * 1000,
+    //     };
+    //     ESP_ERROR_CHECK(i2c_master_bus_add_device(sc7a20h_bus_handle, &sc7a20h_cfg, &sc7a20h_dev_handle));
+
+    //     uint8_t who_am_i;
+    //     esp_err_t err = sc7a20h_read_bytes(WHO_AM_I_REG, &who_am_i, 1);
+    //     if (err != ESP_OK)
+    //     {
+    //         ESP_LOGE(TAG, "读取WHO_AM_I寄存器失败: 0x%x", err);
+    //         return;
+    //     }
+
+    //     if (who_am_i != 0x11)
+    //     {
+    //         ESP_LOGE(TAG, "无效的WHO_AM_I值: 0x%02X (期望值: 0x11)", who_am_i);
+    //         return;
+    //     }
+
+    //     // 配置加速度计: 100Hz输出数据率, ±4g量程
+    //     sc7a20h_write_byte(CTRL_REG1, 0x57); // CTRL_REG1
+    //     if (err != ESP_OK)
+    //     {
+    //         ESP_LOGE(TAG, "写入CTRL_REG1失败: 0x%x", err);
+    //         return;
+    //     }
+    //     sc7a20h_write_byte(CTRL_REG4, 0x01); // CTRL_REG4
+    //     if (err != ESP_OK)
+    //     {
+    //         ESP_LOGE(TAG, "写入CTRL_REG4失败: 0x%x", err);
+    //     }
+
+    //     int16_t x, y, z;
+    //     if (sc7a20h_read_accel(&x, &y, &z) == ESP_OK)
+    //     {
+    //         ESP_LOGI(TAG, "Accel X:%.2fg Y:%.2fg Z:%.2fg",
+    //                  x * 0.004f, y * 0.004f, z * 0.004f);
+    //     }
+
+    // }
+    //==========================================================================================
 
 public:
-    CompactWifiBoardLCD() : boot_button_(BOOT_BUTTON_GPIO), audio_codec(CODEC_RX_GPIO, CODEC_TX_GPIO)
-    {
+    CompactWifiBoardLCD() :
+        boot_button_(BOOT_BUTTON_GPIO), audio_codec(CODEC_RX_GPIO, CODEC_TX_GPIO) {
         // 设置SLEEP_GOIO引脚为上拉输入模式
         gpio_set_pull_mode(SLEEP_GOIO, GPIO_PULLUP_ONLY);
         // 设置SLEEP_GOIO引脚为输出模式
@@ -343,13 +754,13 @@ public:
         // InitializePowerSaveTimer();
 
         // 设置音频编解码器唤醒回调函数
-        audio_codec.OnWakeUp([this](const std::string &command)
-                             {
+        audio_codec.OnWakeUp([this](const std::string &command) {
             // 如果唤醒词为vb6824_get_wakeup_word()，则唤醒设备
             if (command == std::string(vb6824_get_wakeup_word())){
-                if(Application::GetInstance().GetDeviceState() != kDeviceStateListening && !min_program_in_ota_mode()){
+                // if(Application::GetInstance().GetDeviceState() != kDeviceStateListening && !min_program_in_ota_mode()){
+                if(Application::GetInstance().GetDeviceState() != kDeviceStateListening){
                     ESP_LOGI(TAG, "Wake word detected: %s", command.c_str());
-                    ESP_LOGI(TAG,"min_program_in_ota_mode=%d",min_program_in_ota_mode());
+                    // ESP_LOGI(TAG,"min_program_in_ota_mode=%d",min_program_in_ota_mode());
                     Application::GetInstance().WakeWordInvoke("你好小智");
                 }
             // 如果唤醒词为"开始配网"，则重置WiFi配置
@@ -364,8 +775,7 @@ public:
         // touch_button_init();
     }
 
-    virtual Led *GetLed() override
-    {
+    virtual Led *GetLed() override {
         static SingleLed led(BUILTIN_LED_GPIO);
         return &led;
     }
@@ -375,38 +785,32 @@ public:
      * 这是一个重写（override）的虚函数，用于返回当前对象的音频编解码器实例
      * @return 返回一个指向AudioCodec类型对象的指针，具体为audio_codec成员变量
      */
-    virtual AudioCodec *GetAudioCodec() override
-    {
+    virtual AudioCodec *GetAudioCodec() override {
         return &audio_codec; // 返回audio_codec成员变量的地址
     }
 
-    virtual Display *GetDisplay() override
-    {
+    virtual Display *GetDisplay() override {
         return display_;
     }
 
 #if CONFIG_LCD_ST77916_360X360
     // 获取背光对象
-    virtual Backlight *GetBacklight() override
-    {
-        if (QSPI_PIN_NUM_LCD_BL != GPIO_NUM_NC)
-        {
+    virtual Backlight *GetBacklight() override {
+        if (QSPI_PIN_NUM_LCD_BL != GPIO_NUM_NC) {
             static PwmBacklight backlight(QSPI_PIN_NUM_LCD_BL, QSPI_DISPLAY_BACKLIGHT_OUTPUT_INVERT);
             return &backlight;
         }
         return nullptr;
     }
 #elif CONFIG_LCD_ST7796_240X240 || CONFIG_LCD_GC9A01_160X160
-    // 获取背光对象
-    virtual Backlight *GetBacklight() override
-    {
-        if (SPI_LCD_BL != GPIO_NUM_NC)
-        {
-            static PwmBacklight backlight(SPI_LCD_BL, SPI_DISPLAY_BACKLIGHT_OUTPUT_INVERT);
-            return &backlight;
-        }
-        return nullptr;
+// 获取背光对象
+virtual Backlight *GetBacklight() override {
+    if (SPI_LCD_BL != GPIO_NUM_NC) {
+        static PwmBacklight backlight(SPI_LCD_BL, SPI_DISPLAY_BACKLIGHT_OUTPUT_INVERT);
+        return &backlight;
     }
+    return nullptr;
+}
 #endif
 };
 
