@@ -86,23 +86,23 @@ private:
         });
 
         boot_button_.OnDoubleClick([this]() {
-#if CONFIG_SUPPORT_MINI_PROGRAMS_REPLACE_PSD
-            page_manager_t *pm = page_manager_get();
-            if (strcmp(pm->current_page->name, "home") == 0) { // 在有素材的页面,双击删除素材
-                page_manager_switch_to_nohist("tip_del", ANIM_TYPE_NONE);
-                ESP_LOGI(TAG, "显示删除界面");
-            } else if (strcmp(pm->current_page->name, "tip_del") == 0) {
-                page_manager_switch_to_nohist("home", ANIM_TYPE_NONE);
-                ESP_LOGI(TAG, "用户取消删除");
-            }
-#elif (defined(CONFIG_VB6824_OTA_SUPPORT) && CONFIG_VB6824_OTA_SUPPORT == 1)
             if (esp_timer_get_time() > 20 * 1000 * 1000) {
+#if CONFIG_SUPPORT_MINI_PROGRAMS_REPLACE_PSD
+                page_manager_t *pm = page_manager_get();
+                if (strcmp(pm->current_page->name, "home") == 0) { // 在有素材的页面,双击删除素材
+                    page_manager_switch_to_nohist("tip_del", ANIM_TYPE_NONE);
+                    ESP_LOGI(TAG, "显示删除界面");
+                } else if (strcmp(pm->current_page->name, "tip_del") == 0) {
+                    page_manager_switch_to_nohist("home", ANIM_TYPE_NONE);
+                    ESP_LOGI(TAG, "用户取消删除");
+                }
+#else
                 ESP_LOGI(TAG, "Long press, do not enter OTA mode %ld", (uint32_t)esp_timer_get_time());
                 return;
+#endif
             } else {
                 audio_codec.OtaStart(0);
             }
-#endif
         });
 
 #if CONFIG_SUPPORT_MINI_PROGRAMS_REPLACE_PSD
