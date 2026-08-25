@@ -193,14 +193,19 @@
 <body>
     <h1>VB6824升级</h1>
     <div class="container">
-        <div class="input-field">
+        <div class="input-field" id="authField">
             <input type="text" id="authCode" placeholder=" " required>
             <label for="authCode">授权码</label>
         </div>
-        
+
         <!-- 新增的恢复按钮 -->
         <button id="restoreButton">恢复你好小智</button>
-        
+
+        <!-- 从入口页跳转过来时显示:无需再输授权码,直接确认升级 -->
+        <p id="confirmHint" style="display:none; margin: 0 0 10px; color:#333; font-size:15px; line-height:1.6;">
+            已识别授权信息，点击下方按钮确认升级（更换唤醒词）
+        </p>
+
         <button id="upgradeButton">升级</button>
 
         <div class="progress" id="progress-container">
@@ -220,6 +225,19 @@
     </div>
 
     <script>
+        // 从公网入口页跳转过来时,授权码通过 ?auth= 携带:自动填入并隐藏输入框/恢复按钮,
+        // 用户无需再输一次,只需点"确认升级"
+        (function() {
+            var auth = new URLSearchParams(window.location.search).get('auth');
+            if (auth) {
+                document.getElementById('authCode').value = auth;
+                document.getElementById('authField').style.display = 'none';
+                document.getElementById('restoreButton').style.display = 'none';
+                document.getElementById('confirmHint').style.display = 'block';
+                document.getElementById('upgradeButton').textContent = '确认升级';
+            }
+        })();
+
         // 新增的恢复按钮点击事件
         document.getElementById('restoreButton').onclick = function() {
             document.getElementById('authCode').value = '123456';
